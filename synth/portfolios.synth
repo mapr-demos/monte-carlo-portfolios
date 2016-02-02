@@ -1,0 +1,12 @@
+[
+    {"name":"id", "class":"id"},
+    {"name":"start", "class":"date", "start":"2014-01-31", "end":"2014-02-07"},
+    {"name":"end", "class":"date", "start":"2015-01-31", "end":"2015-02-07"},
+    {"name":"instruments", "class":"sequence", 
+     "base":{"class":"map",  "value": [
+           {"name": "instrument", "class": "foreign-key", "size": 10000},
+           {"name": "weight", "class": "gamma", "dof": 4, "scale": 0.01}
+       ]},
+     "length":10}
+
+]
