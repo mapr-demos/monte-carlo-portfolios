@@ -1,0 +1,43 @@
+[
+  {"name":"date_offset", "class":"id"},
+  {"name":"m0", "class":"random-walk", "mean":0, "precision": {
+       "class": "gamma",
+       "dof": 2
+   }},
+  {"name":"m1", "class":"random-walk", "mean":0, "precision": {
+       "class": "gamma",
+       "dof": 2
+   }},
+  {"name":"m2", "class":"random-walk", "mean":0, "precision": {
+       "class": "gamma",
+       "dof": 2
+   }},
+  {"name":"m3", "class":"random-walk", "mean":0, "precision": {
+       "class": "gamma",
+       "dof": 2
+   }},
+  {"name":"m4", "class":"random-walk", "mean":0, "precision": {
+       "class": "gamma",
+       "dof": 2
+   }},
+  {"name":"m5", "class":"random-walk", "mean":0, "precision": {
+       "class": "gamma",
+       "dof": 2
+   }},
+  {"name":"m6", "class":"random-walk", "mean":0, "precision": {
+       "class": "gamma",
+       "dof": 2
+   }},
+  {"name":"m7", "class":"random-walk", "mean":0, "precision": {
+       "class": "gamma",
+       "dof": 2
+   }},
+  {"name":"m8", "class":"random-walk", "mean":0, "precision": {
+       "class": "gamma",
+       "dof": 2
+   }},
+  {"name":"m9", "class":"random-walk", "mean":0, "precision": {
+       "class": "gamma",
+       "dof": 2
+   }}
+]
