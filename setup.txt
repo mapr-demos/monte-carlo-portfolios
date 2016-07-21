@@ -1,0 +1,81 @@
+java -cp /Users/pborne/Desktop/MapR/Code/log-synth/out/artifacts/log_synth_jar/log-synth.jar \
+	com.mapr.synth.Main \
+	-count 10 -schema /Users/pborne/Desktop/MapR/Code/monte-carlo-portfolios/synth/portfolios.synth
+
+
+java -cp ./log_synth.jar \
+	com.mapr.synth.Main \
+	-count 10 -schema /Users/pborne/Desktop/MapR/Code/monte-carlo-portfolios/synth/portfolios.synth
+
+
+java -jar /Users/pborne/Desktop/MapR/Code/log-synth/target/log-synth-0.1-SNAPSHOT-jar-with-dependencies.jar \
+	-count 10 -schema /Users/pborne/Desktop/MapR/Code/monte-carlo-portfolios/synth/portfolios.synth -format JSON > portfolios.json
+
+java -jar /Users/pborne/Desktop/MapR/Code/log-synth/target/log-synth-0.1-SNAPSHOT-jar-with-dependencies.jar \
+	-count 10 -schema /Users/pborne/Desktop/MapR/Code/monte-carlo-portfolios/synth/macro.synth -format JSON > macro.json
+
+
+vim /Users/pborne/Desktop/MapR/Code/monte-carlo-portfolios/synth/portfolios.synth
+
+		@Option(name = "-help")
+		private boolean help = false;
+
+		@Option(name = "-verbose")
+		private boolean verbose = false;
+
+		@Option(name = "-filepath")
+		private String filepath = null;
+
+		@Option(name = "-format")
+		private String format = null;
+
+		@Option(name = "-table")
+		private String table = null;
+
+		@Option(name = "-jsonKey")
+		private String jsonKey = null;
+		
+	private static final String HELP = "Usage: -filepath <path to file> -format JSON|TSV|CSV [-jsonKey <field name>] -table <Mapr-DB table name> [-verbose] [-help]";
+
+
+On the VM:
+groupadd mapr_test -g 503
+useradd pborne -g 503 -m -u 502 -p mapr
+passwd pborne
+
+Check:
+su - pborne
+id
+
+Create a folder for pborne in the FS:
+
+mkdir /mapr/demo.mapr.com/user/pborne
+chown pborne:mapr_test /mapr/demo.mapr.com/user/pborne/
+
+
+
+
+
+maprcli table create -path /mapr/demo.mapr.com/user/pborne/test.table -tabletype json
+maprcli table create -path /mapr/demo.mapr.com/user/pborne/portfolios -tabletype json -insertionorder false
+maprcli table create -path /mapr/demo.mapr.com/user/pborne/testBinary -tabletype json -insertionorder false
+
+
+
+
+
+{"_id":"0","metadata":{"min_instrument":5,"max_instrument":4112,"min_weight":11.108738657302295,"max_weight":299.2617711307142},
+"instruments":{"uncompressedIntegerSize":17,"compressed":"AAAAABaFhU8AoBCfiQvOmoIHgQeORMPDeYo+y4lApogAAAAA","algo":"bpacking+variablebyte"},
+"weights":{"uncompressedDoubleSize":17,"compressed":"CfjO1RU1U2hA1/1Kp192NZklPaMdmf1ry450eSimZpmjr8blMnNne83Tcco1ZZlzAjFy1DMEm8Ovj/daGpnO+iIorGZqT30J/hJ2EZk1cwRfjvVFfVCX/CXDOZmP1NVFsi8Td45sXPfSPJkzTRPYnuMCOfjhQ+1IJJbD+fp0Y2gmAA==","algo":"fpc"}}
+
+CfjO1RU1U2hA1/1Kp192NZklPaMdmf1ry450eSimZpmjr8blMnNne83Tcco1ZZlzAjFy1DMEm8Ovj/daGpnO+iIorGZqT30J/hJ2EZk1cwRfjvVFfVCX/CXDOZmP1NVFsi8Td45sXPfSPJkzTRPYnuMCOfjhQ+1IJJbD+fp0Y2gmAA==
+CfjO1RU1U2hA1/1Kp192NZklPaMdmf1ry450eSimZpmjr8blMnNne83Tcco1ZZlzAjFy1DMEm8Ovj/daGpnO+iIorGZqT30J/hJ2EZk1cwRfjvVFfVCX/CXDOZmP1NVFsi8Td45sXPfSPJkzTRPYnuMCOfjhQ+1IJJbD+fp0Y2gmAA==
+
+
+
+{"_id":"0","instruments":{"algo":"bpacking+variablebyte","compressed":"AAAAABaFhU8AoBCfiQvOmoIHgQeORMPDeYo+y4lApogAAAAA","uncompressedIntegerSize":17},
+"metadata":{"max_instrument":4112,"max_weight":299.2617711307142,"min_instrument":5,"min_weight":11.108738657302295},
+"weights":{"algo":"fpc","compressed":"CfjO1RU1U2hA1/1Kp192NZklPaMdmf1ry450eSimZpmjr8blMnNne83Tcco1ZZlzAjFy1DMEm8Ovj/daGpnO+iIorGZqT30J/hJ2EZk1cwRfjvVFfVCX/CXDOZmP1NVFsi8Td45sXPfSPJkzTRPYnuMCOfjhQ+1IJJbD+fp0Y2gmAA==","uncompressedDoubleSize":17}}
+
+
+

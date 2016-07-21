@@ -7,6 +7,6 @@
            {"name": "instrument", "class": "foreign-key", "size": 10000},
            {"name": "weight", "class": "gamma", "dof": 4, "scale": 0.01}
        ]},
-     "length":10}
+     "length":250}
 
 ]

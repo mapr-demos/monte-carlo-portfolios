@@ -1,0 +1,12 @@
+language: java
+
+jdk:
+  - oraclejdk7
+  - oraclejdk8
+
+install: true
+
+script: mvn clean test jacoco:report
+
+after_success:
+  - mvn coveralls:report
