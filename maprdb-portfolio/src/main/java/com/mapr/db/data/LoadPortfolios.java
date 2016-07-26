@@ -27,32 +27,7 @@ import com.mapr.db.impl.FamilyDescriptorImpl;
 
 import me.lemire.integercompression.*;
 
-//import net.jpountz.lz4.LZ4Compressor;
-//import net.jpountz.lz4.LZ4Factory;
-
 public class LoadPortfolios {
-
-	private static final int COLUMN_BLOCK_SIZE = 8192;
-	private static final String HELP = "Usage: -filepath <path to input file> -format JSON|TSV|CSV [-jsonKey <field name>] -table <Mapr-DB table path> [-verbose] [-debug] [-check] [-help]";
-	private String filePath;
-	private Format fileFormat;
-	private String tablePath;
-	private String jsonKey;
-	private boolean verbose;
-	private boolean check;
-	private boolean checkSnappy;
-	private boolean debug;
-
-	private Table table;
-	private String start_date;
-	private String end_date;
-
-	// Compressor used for the weights
-	private String floatCompressorName = "snappy";
-
-	// This codec seems to be usually giving the best compression ratio for instruments
-	private IntegerCODEC integerCodec = new Composition(new BinaryPacking(), new VariableByte());
-	private String integerCodecName = "bpacking+variablebyte";
 
 	public static void main(String[] args) throws IOException {
 
@@ -71,7 +46,6 @@ public class LoadPortfolios {
 
 		new LoadPortfolios().load(opts);
 	}
-
 	public void load(Options options) throws IOException {
 		if (options == null) {
 			System.err.println("No command line options received. Exiting.");
@@ -130,21 +104,27 @@ public class LoadPortfolios {
 
 		if (verbose) {
 			System.err.println("--- Parsing Results ---");
-			System.err.println("File path:   " + filePath);
-			System.err.println("File format: " + fileFormat);
-			System.err.println("Key name:    " + jsonKey);
-			System.err.println("Table path:  " + tablePath);
-			System.err.println("Verbose:     " + verbose);
-			System.err.println("Check:       " + check);
-			System.err.println("Debug:       " + debug);
+			System.err.println("File path:     " + filePath);
+			System.err.println("File format:   " + fileFormat);
+			System.err.println("JSON Key name: " + jsonKey);
+			System.err.println("Table path:    " + tablePath);
+			System.err.println("Verbose:       " + verbose);
+			System.err.println("Check:         " + check);
+			System.err.println("CheckSnappy:   " + checkSnappy);
+			System.err.println("Debug:         " + debug);
+			System.err.println("DebugJson:     " + debugJson);
 		}
 
 		 table = getTable(tablePath);
 
 		if (fileFormat == Format.JSON)
 			loadFromJSON(options);
+		else {
+			System.out.println("Unknown file format or not implemented yet. Format: " + fileFormat);
+			System.exit(1);
+		}
 	}
-
+	
 	private Table getTable(String tableName) {
 		if (verbose)
 			System.err.println("\n========== getTable " + tableName + " ==========");
@@ -278,7 +258,7 @@ public class LoadPortfolios {
 
 							if (debug) {
 								System.out.println("loadFromJson: Content of compressedInstruments instrumentCompressorName: " + instrumentCompressorName);
-								dumpBuffer(compressedInstruments);
+								Debug.dump(compressedInstruments);
 							}
 
 							// Compress the weights
@@ -421,11 +401,11 @@ public class LoadPortfolios {
 					break;
 				}
 
-//				if (debug) {
-//					for (int i = 0; i < depth; i++)
-//						System.out.print("-");
-//					System.out.println("> " + jParser.getCurrentToken().toString() + ": " + fieldName);
-//				}
+				if (debugJson) {
+					for (int i = 0; i < depth; i++)
+						System.out.print("-");
+					System.out.println("> " + jParser.getCurrentToken().toString() + ": " + fieldName);
+				}
 			}
 			jParser.close();
 			if (table != null) {
@@ -452,7 +432,7 @@ public class LoadPortfolios {
 		retrievedWeightsBuffer.rewind();
 		byte[] retrievedWeights = Arrays.copyOf(retrievedWeightsBuffer.array(), compressedByteSize);
 
-		compareByteBuffers(referenceWeights, retrievedWeights, "Weight buffers: ");
+		Debug.compareByteBuffers(referenceWeights, retrievedWeights, "Weight buffers: ");
 		checkWeights(algo, numberOfDoubles, weights, retrievedWeights);
 	}
 
@@ -468,25 +448,8 @@ public class LoadPortfolios {
 		retrievedBuffer.rewind();
 		byte[] retrievedInstruments = Arrays.copyOf(retrievedBuffer.array(), compressedByteSize);
 
-		compareByteBuffers(referenceInstruments, retrievedInstruments, "Instrument buffers: ");
+		Debug.compareByteBuffers(referenceInstruments, retrievedInstruments, "Instrument buffers: ");
 		checkInstruments(algo, numberOfIntegers, instruments, retrievedInstruments);
-	}
-	
-	private void compareByteBuffers(byte[] reference, byte[] other, String beginning) {		
-        if (reference == null || other == null || reference.length != other.length ) {
-        	System.err.println(beginning + "Buffers are different or one of them is empty.");
-        	return;
-        }
-
-		for (int i = 0; i < reference.length; i++)
-			if (reference[i] != other[i]) {
-				System.err.println(beginning + "Difference detected between buffers.");
-				dumpBuffer(reference);
-				dumpBuffer(other);
-				return;
-			}
-		
-		System.err.println(beginning + "Buffers are identical.");
 	}
 	
 	private void checkWeights(String algo, int numberOfDoubles, ArrayList<Double> weights, byte[] retrievedWeights) {
@@ -527,9 +490,9 @@ public class LoadPortfolios {
 		if (algo.equals("none")) {
 			decompressedWeights = CompressionHelper.bytesToDoubles(retrievedWeights);
 		}
-//		if (debug) {
-//			System.out.println("checkWeights: " + "decompressedWeights.length: " + decompressedWeights.length + " referenceDoubles.length: " + referenceDoubles.length);
-//		}
+		if (debug) {
+			System.out.println("checkWeights: " + "decompressedWeights.length: " + decompressedWeights.length + " referenceDoubles.length: " + referenceDoubles.length);
+		}
 
 		for (int index = 0; index < referenceDoubles.length; index++) {
 			if (referenceDoubles[index] != decompressedWeights[index]) {
@@ -573,11 +536,11 @@ public class LoadPortfolios {
 		}
 
 		if (algo.equals("none")) {
-			decompressedInstruments = CompressionHelper.bytesToIntegers(retrievedInstruments);
+			decompressedInstruments = CompressionHelper.bytesToInts(retrievedInstruments);
 		}
-//		if (debug) {
-//			System.out.println("checkWeights: " + "decompressedWeights.length: " + decompressedWeights.length + " referenceDoubles.length: " + referenceDoubles.length);
-//		}
+		if (debug) {
+			System.out.println("checkInstruments: " + "decompressedInstruments.length: " + decompressedInstruments.length + " referenceIntegers.length: " + referenceIntegers.length);
+		}
 
 		for (int index = 0; index < referenceIntegers.length; index++) {
 			if (referenceIntegers[index] != decompressedInstruments[index]) {
@@ -603,7 +566,7 @@ public class LoadPortfolios {
 	private byte[] getCompressedWeights(ArrayList<Double> weights) {
 
 		double[] uncompressedWeights = CompressionHelper.doublesToDoubles(weights);
-		byte[]   compressedWeights;
+		byte  []   compressedWeights;
 		try {
 			compressedWeights = Snappy.compress(uncompressedWeights);
 		} catch (IOException e) {
@@ -613,7 +576,7 @@ public class LoadPortfolios {
 
 		if (checkSnappy) {
 			System.out.println("getCompressedWeights: Content of compressedWeights");
-			dumpBuffer(compressedWeights);
+			Debug.dump(compressedWeights);
 
 			double[] decompressedWeights;
 			try {
@@ -632,12 +595,6 @@ public class LoadPortfolios {
 		}
 
         return compressedWeights;
-	}
-
-	private void dumpBuffer(byte[] buffer) {
-		for (int i = 0; i < buffer.length; i++)
-			System.out.print(buffer[i] + " ");
-		System.out.println();
 	}
 	
 	private Document getInstrumentDocument(int numberOfInstruments, byte[] instruments, String algo) {
@@ -696,7 +653,7 @@ public class LoadPortfolios {
     	IntWrapper inpos  = new IntWrapper(0);
     	IntWrapper outpos = new IntWrapper(0);
         
-    	int[] compressedInstrumentsAsInts = CompressionHelper.bytesToIntegers(compressedInstruments);
+    	int[] compressedInstrumentsAsInts = CompressionHelper.bytesToInts(compressedInstruments);
     	
 		integerCodec.uncompress(compressedInstrumentsAsInts,
 								inpos,
@@ -729,6 +686,9 @@ public class LoadPortfolios {
 		@Option(name = "-debug")
 		private boolean debug = false;
 
+		@Option(name = "-debugJson")
+		private boolean debugJson = false;
+
 		@Option(name = "-filepath")
 		private String filepath = null;
 
@@ -744,4 +704,27 @@ public class LoadPortfolios {
 		@Argument()
 		List<String> files;
 	}
+
+	private static final int COLUMN_BLOCK_SIZE = 8192;
+	private static final String HELP = 	"Usage: -filepath <path to input file> -format JSON|TSV|CSV [-jsonKey <field name>] " +
+										"       -table <Mapr-DB table path> " +
+										"      [-verbose] [-debug] [-debugJson] [-check] [-checkSnappy] [-help]";
+	private String filePath;
+	private Format fileFormat;
+	private String tablePath;
+	private String jsonKey;
+	private boolean verbose;
+	private boolean check;
+	private boolean checkSnappy;
+	private boolean debug;
+
+	private boolean debugJson;
+	private Table table;
+	private String start_date;
+	private String end_date;
+	// Compressor used for the weights
+	private String floatCompressorName = "snappy";
+	// This codec seems to be usually giving the best compression ratio for instruments
+	private IntegerCODEC integerCodec = new Composition(new BinaryPacking(), new VariableByte());
+	private String integerCodecName = "bpacking+variablebyte";
 }
