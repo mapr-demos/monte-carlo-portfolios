@@ -252,7 +252,7 @@ public class LoadPortfolios {
 								instrumentCompressorName = integerCodecName;
 							}
 							else {
-								document.set("instruments", getInstrumentDocument(instruments.size(), CompressionHelper.integersToBytes(instruments), "none"));
+								document.set("instruments", getInstrumentDocument(instruments.size(), BitManipulationHelper.integersToBytes(instruments), "none"));
 								instrumentCompressorName = "none";
 							}
 
@@ -276,7 +276,7 @@ public class LoadPortfolios {
 								weightCompressorName = floatCompressorName;
 							}
 							else {
-								document.set("weights", getWeightDocument(weights.size(), CompressionHelper.doublesToBytes(weights), "none"));
+								document.set("weights", getWeightDocument(weights.size(), BitManipulationHelper.doublesToBytes(weights), "none"));
 								weightCompressorName = "none";
 							}
 								// Insert document in MapRDB
@@ -297,13 +297,13 @@ public class LoadPortfolios {
 										if (instrumentCompressorName.equals(integerCodecName))
 											checkInstrumentsInMapRDB(idValue, instruments, compressedInstruments);
 										else
-											checkInstrumentsInMapRDB(idValue, instruments, CompressionHelper.integersToBytes(instruments));
+											checkInstrumentsInMapRDB(idValue, instruments, BitManipulationHelper.integersToBytes(instruments));
 
 										System.err.println("Checking compressed weights");
 										if (weightCompressorName.equals(floatCompressorName))
 											checkWeightsInMapRDB(idValue, weights, compressedWeights);
 										else
-											checkWeightsInMapRDB(idValue, weights, CompressionHelper.doublesToBytes(weights));
+											checkWeightsInMapRDB(idValue, weights, BitManipulationHelper.doublesToBytes(weights));
 									}
 								} catch (DocumentExistsException dee) {
 									System.err.println("Exception during insert : " + dee.getMessage());
@@ -456,7 +456,7 @@ public class LoadPortfolios {
 
 		String beginning = "Check weights: ";
 		
-        double[] referenceDoubles = CompressionHelper.doublesToDoubles(weights);
+        double[] referenceDoubles = BitManipulationHelper.doublesToDoubles(weights);
 		if (algo == null || algo.equals("")) {
 			System.err.println(beginning + "Cannot retrieve the algorithm used to compress the weights!");
 			return;
@@ -488,7 +488,7 @@ public class LoadPortfolios {
 		}
 
 		if (algo.equals("none")) {
-			decompressedWeights = CompressionHelper.bytesToDoubles(retrievedWeights);
+			decompressedWeights = BitManipulationHelper.bytesToDoubles(retrievedWeights);
 		}
 		if (debug) {
 			System.out.println("checkWeights: " + "decompressedWeights.length: " + decompressedWeights.length + " referenceDoubles.length: " + referenceDoubles.length);
@@ -509,7 +509,7 @@ public class LoadPortfolios {
 
 		String beginning = "Check instruments: ";
 		
-        int[] referenceIntegers = CompressionHelper.integersToInts(instruments);
+        int[] referenceIntegers = BitManipulationHelper.integersToInts(instruments);
 		if (algo == null || algo.equals("")) {
 			System.err.println(beginning + "Cannot retrieve the algorithm used to compress the instruments!");
 			return;
@@ -536,7 +536,7 @@ public class LoadPortfolios {
 		}
 
 		if (algo.equals("none")) {
-			decompressedInstruments = CompressionHelper.bytesToInts(retrievedInstruments);
+			decompressedInstruments = BitManipulationHelper.bytesToInts(retrievedInstruments);
 		}
 		if (debug) {
 			System.out.println("checkInstruments: " + "decompressedInstruments.length: " + decompressedInstruments.length + " referenceIntegers.length: " + referenceIntegers.length);
@@ -565,7 +565,7 @@ public class LoadPortfolios {
 
 	private byte[] getCompressedWeights(ArrayList<Double> weights) {
 
-		double[] uncompressedWeights = CompressionHelper.doublesToDoubles(weights);
+		double[] uncompressedWeights = BitManipulationHelper.doublesToDoubles(weights);
 		byte  []   compressedWeights;
 		try {
 			compressedWeights = Snappy.compress(uncompressedWeights);
@@ -610,7 +610,7 @@ public class LoadPortfolios {
 
 	private byte[] getCompressedInstruments(ArrayList<Integer> instruments) {
 
-		int[] uncompressedInstruments = CompressionHelper.integersToInts(instruments);
+		int[] uncompressedInstruments = BitManipulationHelper.integersToInts(instruments);
 		int[]   compressedInstruments = new int[4 * uncompressedInstruments.length + 1024];
 		
 		IntWrapper inpos  = new IntWrapper(0);
@@ -622,7 +622,7 @@ public class LoadPortfolios {
 							  compressedInstruments,
 							  outpos);
         
-		return CompressionHelper.intsToBytes(compressedInstruments, 0, outpos.get() + 1);
+		return BitManipulationHelper.intsToBytes(compressedInstruments, 0, outpos.get() + 1);
 	}
 
 	private int[] getDecompressedInstruments(byte[] compressedInstruments, int numberOfIntegers) {
@@ -653,7 +653,7 @@ public class LoadPortfolios {
     	IntWrapper inpos  = new IntWrapper(0);
     	IntWrapper outpos = new IntWrapper(0);
         
-    	int[] compressedInstrumentsAsInts = CompressionHelper.bytesToInts(compressedInstruments);
+    	int[] compressedInstrumentsAsInts = BitManipulationHelper.bytesToInts(compressedInstruments);
     	
 		integerCodec.uncompress(compressedInstrumentsAsInts,
 								inpos,

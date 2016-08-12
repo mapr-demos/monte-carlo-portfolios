@@ -1,10 +1,9 @@
 package com.mapr.db.data;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-public class CompressionHelper {
+public class BitManipulationHelper {
 
 	public static int[] integersToInts(List<Integer> integers) {
 		int[] ints = new int[integers.size()];
@@ -353,52 +352,113 @@ public class CompressionHelper {
 		return floats;
 	}
 
-	public static byte[] rleEncode(byte[] uncompressed) {
-		int size = uncompressed.length;
-		ByteBuffer bb = ByteBuffer.allocate(2 * size);
-		bb.putInt(size);
-		int zeros = 0;
-		for (int i = 0; i < size; i++) {
-			if (uncompressed[i] == 0) {
-				if (++zeros == 255) {
-					bb.putShort((short) zeros);
-					zeros = 0;
-				}
-			} else {
-				if (zeros > 0) {
-					bb.putShort((short) zeros);
-					zeros = 0;
-				}
-				bb.put(uncompressed[i]);
-			}
+	public static int[] floatsToInts(float[] floats, int startFrom, int endAt) {
+		if (startFrom < 0 || startFrom > floats.length) {
+			System.err.println("Returning null! startFrom: " + startFrom + " floats.length: " + floats.length);
+			return null;
 		}
-		if (zeros > 0) {
-			bb.putShort((short) zeros);
-			zeros = 0;
+		if (endAt < 0 || endAt > floats.length) {
+			System.err.println("Returning null! endAt: " + endAt + " floats.length: " + floats.length);
+			return null;
 		}
-		size = bb.position();
-		byte[] buf = new byte[size];
-		bb.rewind();
-		bb.get(buf, 0, size).array();
-		return buf;
+		if (endAt < startFrom) {
+			System.err.println("Returning null! endAt: " + endAt + " startFrom: " + startFrom);
+			return null;
+		}
+	
+		int numberOfFloats = endAt - startFrom;
+	
+		// x86 is little Endian
+		/*
+		 
+		0A.0B.0C.0D.
+		 |  |  |  |
+		 |  |  |  |-> a + 0: 0D
+		 |  |  |----> a + 1: 0C
+		 |  |-------> a + 2: 0B
+		 |----------> a + 3: 0A
+		*/
+	
+		int[] ints = new int[numberOfFloats];
+		int offset = 0;
+		for (int idx = startFrom; idx < endAt; idx++)
+			ints[offset++] = Float.floatToRawIntBits(floats[idx]);
+
+		return ints;
 	}
 
-	public static byte[] rleDecode(byte[] compressed) {
-		ByteBuffer bb = ByteBuffer.wrap(compressed);
-		byte[] uncompressed = new byte[bb.getInt()];
-		int pos = 0;
-		while (bb.position() < bb.capacity()) {
-			byte value = bb.get();
-			if (value == 0) {
-				bb.position(bb.position() - 1);
-				pos += bb.getShort();
-			} else {
-				uncompressed[pos++] = value;
-			}
-		}
-		return uncompressed;
+	public static float[] intsToFloats(int[] ints) {
+		float[] floats = new float[ints.length];
+		for (int i = 0; i < floats.length; i++)
+			floats[i] = Float.intBitsToFloat(ints[i]);
+
+		return floats;
 	}
 
+	public static long[] doublesToLongs(double[] doubles, int startFrom, int endAt) {
+		if (startFrom < 0 || startFrom > doubles.length) {
+			System.err.println("Returning null! startFrom: " + startFrom + " doubles.length: " + doubles.length);
+			return null;
+		}
+		if (endAt < 0 || endAt > doubles.length) {
+			System.err.println("Returning null! endAt: " + endAt + " doubles.length: " + doubles.length);
+			return null;
+		}
+		if (endAt < startFrom) {
+			System.err.println("Returning null! endAt: " + endAt + " startFrom: " + startFrom);
+			return null;
+		}
+	
+		int numberOfDoubles = endAt - startFrom;
+	
+		// x86 is little Endian
+		/*
+		 
+		0A.0B.0C.0D.
+		 |  |  |  |
+		 |  |  |  |-> a + 0: 0D
+		 |  |  |----> a + 1: 0C
+		 |  |-------> a + 2: 0B
+		 |----------> a + 3: 0A
+		*/
+	
+		long[] longs = new long[numberOfDoubles];
+		int offset = 0;
+		for (int idx = startFrom; idx < endAt; idx++)
+			longs[offset++] = Double.doubleToRawLongBits(doubles[idx]);
+
+		return longs;
+	}
+
+	public static double[] longsToDoubles(long[] longs) {
+		double[] doubles = new double[longs.length];
+		for (int i = 0; i < doubles.length; i++)
+			doubles[i] = Double.longBitsToDouble(longs[i]);
+		
+		return doubles;
+	}
+
+	/*
+	Published in 1988, the C Programming Language 2nd Ed. (by Brian W. Kernighan and Dennis M. Ritchie) mentions
+	this in exercise 2-9. On April 19, 2006 Don Knuth pointed out that this method "was first published by Peter Wegner
+	in CACM 3 (1960), 322. (Also discovered independently by Derrick Lehmer and published in 1964 in a book edited by Beckenbach.)"
+
+	It goes through as many iterations as there are set bits. So if we have a 32-bit word with only the high bit set, 
+	then it will only go once through the loop.
+	 */
+	
+	public static int countSetBits(int n) { 
+	    int c = 0; // c accumulates the total bits set in n
+	    if (n < 0) {
+	    	n &= 0b01111111111111111111111111111111;
+	    	c = 1;
+	    }
+	    for (c = 0; n > 0; n = n & (n - 1))
+	    	c++; 
+	    return c; 
+	}
+	
+	
 	public static void testFloats() {
 		// Test floats
 		float[] floats = {0.123f, 1.234f, 2.345f, -0.123f, -1.234f, -2.345f};
@@ -417,6 +477,14 @@ public class CompressionHelper {
 		System.out.println("floatsToBytesTest:");
 		Debug.dump(floatsToBytesTest);
 		
+		int[] floatsToInts = floatsToInts(floats, 0, floats.length);
+		System.out.println("floatsToInts:");
+		Debug.dump(floatsToInts);
+		
+		float[] intsToFloats = intsToFloats(floatsToInts);
+		System.out.println("intsToFloats(floatsToInts):");
+		Debug.dump(intsToFloats);
+				
 		float[] bytesToFloats = bytesToFloats(floatsToBytes);
 		System.out.println("bytesToFloats(floatsToBytes):");
 		Debug.dump(bytesToFloats);
@@ -424,6 +492,7 @@ public class CompressionHelper {
 		float[] bytesToFloatsTest = bytesToFloats(floatsToBytesTest);
 		System.out.println("bytesToFloats(floatsToBytesTest):");
 		Debug.dump(bytesToFloatsTest);
+
 	}
 
 	public static void testDoubles() {
@@ -442,7 +511,15 @@ public class CompressionHelper {
 		byte[] doublesToBytesTest = doublesToBytesTest(listOfDoubles);
 		System.out.println("doublesToBytesTest:");
 		Debug.dump(doublesToBytesTest);
+
+		long[] doublesToLongs = doublesToLongs(doubles, 0, doubles.length);
+		System.out.println("doublesToLongs:");
+		Debug.dump(doublesToLongs);
 		
+		double[] longsToDoubles = longsToDoubles(doublesToLongs);
+		System.out.println("longsToDoubles(doublesToLongs):");
+		Debug.dump(longsToDoubles);
+				
 		double[] bytesToDoubles = bytesToDoubles(doublesToBytes);
 		System.out.println("bytesToDoubles(doublesToBytes):");
 		Debug.dump(bytesToDoubles);
@@ -533,6 +610,13 @@ public class CompressionHelper {
 	
 	}
 
+	public static void testBitCount() {
+		int[] ints = {123456987, 123456789, 234567890, -123456987, -123456789, -234567890};
+		for (int i : ints)
+			System.out.println(i + " has " + countSetBits(i) + " bit(s) set");
+		
+	}
+	
 	public static void main(String[] args) {
 		testFloats();
 		System.out.println();
@@ -543,6 +627,8 @@ public class CompressionHelper {
 		testLongs();
 		System.out.println();
 		testShorts();
+		System.out.println();
+		testBitCount();
 	}
 
 }
