@@ -50,31 +50,15 @@ public class Compression {
 			significandOffset += 23;
 		}
 
-		System.out.println("\nuncompressedSignificands (no XOR):");
-		for (int significand : uncompressedSignificands)
-			System.out.print("00000000000000000000000000000000".substring(Integer.toBinaryString(significand).length()) + Integer.toBinaryString(significand) + " ");
-
+//		if (debug) {
+//			System.out.println("\nuncompressedSignificands (no XOR):");
+//			countOnesAndZeros(uncompressedSignificands);
+//		}
+		
 		// Transpose the significands and compute the numbers of bits set to 1 per row (i.e. column in the original data set)
-		System.out.println("\nTranspose and count the significands:");
-
-		int[] countOnes  = new int[32];
-		int[] countZeros = new int[32];
-		for (int i = 0; i < uncompressedSignificands.length; i += 32) {
-			int[] transposedSignificands = transpose32b(Arrays.copyOfRange(uncompressedSignificands, i, i + 32));
-			int offset = 0;
-			for (int transposedSignificand : transposedSignificands) {
-				int numberOfOnes = Integer.bitCount(transposedSignificand);
-				System.out.println("00000000000000000000000000000000"
-						.substring(Integer.toBinaryString(transposedSignificand).length())
-						+ Integer.toBinaryString(transposedSignificand) + " has "
-						+ numberOfOnes + " bits(s) set to 1");
-				countOnes[offset] += numberOfOnes;
-				countZeros[offset] += 32 - numberOfOnes;
-				offset++;
-			}
-		}
-		for (int i =0; i < countOnes.length; i++) {
-			System.out.println("countOnes[" + i + "] = " + countOnes[i] + " countZeros[" + i + "] = " + countZeros[i] + " Ratio = " + ((float)countOnes[i] / ((float)countOnes[i] + (float)countZeros[i])));
+		if (debug) {
+			System.out.println("\nTranspose and count the significands:");
+			countOnesAndZerosTransposed32(uncompressedSignificands);
 		}
 		
 		// Try a XOR on the exponents and the significand
@@ -102,45 +86,88 @@ public class Compression {
 		if (debug) {
 			System.out.println("\nuncompressedSigns:");
 			for (int sign : uncompressedSigns) {
-				System.out.print("00000000000000000000000000000000".substring(Integer.toBinaryString(sign).length()) + Integer.toBinaryString(sign) + " ");
+				System.out.println("00000000000000000000000000000000".substring(Integer.toBinaryString(sign).length())
+						+ Integer.toBinaryString(sign) + " ");
 			}
 
-			System.out.println("\nuncompressedExponents (1st try on XOR):");
+			System.out.println("\nuncompressedExponents:");
 			for (int exponent : uncompressedExponents) {
-				System.out.print("00000000000000000000000000000000".substring(Integer.toBinaryString(exponent).length()) + Integer.toBinaryString(exponent) + " ");
+				System.out.println("00000000000000000000000000000000".substring(Integer.toBinaryString(exponent).length())
+						+ Integer.toBinaryString(exponent) + " ");
 			}
-			
+
 			System.out.println("\nuncompressedSignificands (1st try on XOR):");
-			for (int significand : uncompressedSignificands) {
-			System.out.print("00000000000000000000000000000000".substring(Integer.toBinaryString(significand).length()) + Integer.toBinaryString(significand) + " ");
-			}
-	
+			countOnesAndZeros(uncompressedSignificands);
+
 		}
 
 		// Start over to try something else
-		signOffset        = 0;
-		exponentOffset    = 0;
-		significandOffset = 0;
-		for (int idx = 0; idx < uncompressedInts.length; idx++) {
-			int currentInt = uncompressedInts[idx];
-			writeBits(uncompressedSigns, currentInt >>> 31, signOffset++, 1);
-			writeBits(uncompressedExponents,   (currentInt & 0b01111111100000000000000000000000) >>> 23, exponentOffset, 8); // Mask the bits we want
-			writeBits(uncompressedSignificands, currentInt & 0b00000000011111111111111111111111,         significandOffset, 23); // Mask the bits we want
-			exponentOffset += 8;
-			significandOffset += 23;
+		// Seems to lead to more entropy than the XOR'ing done above
+		if (1 == 0) {
+			signOffset = 0;
+			exponentOffset = 0;
+			significandOffset = 0;
+			for (int idx = 0; idx < uncompressedInts.length; idx++) {
+				int currentInt = uncompressedInts[idx];
+				writeBits(uncompressedSigns, currentInt >>> 31, signOffset++, 1);
+				writeBits(uncompressedExponents, (currentInt & 0b01111111100000000000000000000000) >>> 23,
+						exponentOffset, 8); // Mask the bits we want
+				writeBits(uncompressedSignificands, currentInt & 0b00000000011111111111111111111111, significandOffset,
+						23); // Mask the bits we want
+				exponentOffset += 8;
+				significandOffset += 23;
+			}
+
+			int previousSignificand = uncompressedSignificands[0];
+			for (int idx = 1; idx < uncompressedSignificands.length; idx++) {
+				int currentSignificand = uncompressedSignificands[idx];
+				uncompressedSignificands[idx] = previousSignificand ^ currentSignificand;
+				previousSignificand = currentSignificand;
+			}
+
+			System.out.println("\nuncompressedSignificands (2nd try on XOR):");
+			countOnesAndZeros(uncompressedSignificands);
 		}
-		
-		int previousSignificand = uncompressedSignificands[0];
-		for (int idx = 1; idx < uncompressedSignificands.length; idx++) {
-			int currentSignificand = uncompressedSignificands[idx];
-			uncompressedSignificands[idx] = previousSignificand ^ currentSignificand;
-			previousSignificand = currentSignificand;
+	}
+
+	/**
+	 * @param uncompressedSignificands
+	 */
+	private static void countOnesAndZerosTransposed32(int[] uncompressedSignificands) {
+		int[] countOnes  = new int[32];
+		int[] countZeros = new int[32];
+		for (int i = 0; i < uncompressedSignificands.length; i += 32) {
+			int[] transposedSignificands = transpose32b(Arrays.copyOfRange(uncompressedSignificands, i, i + 32));
+			int offset = 0;
+			for (int transposedSignificand : transposedSignificands) {
+				int numberOfOnes = Integer.bitCount(transposedSignificand);
+				System.out.println("00000000000000000000000000000000"
+						.substring(Integer.toBinaryString(transposedSignificand).length())
+						+ Integer.toBinaryString(transposedSignificand) + " has "
+						+ numberOfOnes + " bits(s) set to 1");
+				countOnes[offset] += numberOfOnes;
+				countZeros[offset] += 32 - numberOfOnes;
+				offset++;
+			}
 		}
+		for (int i = 0; i < countOnes.length; i++) {
+			System.out.println("countOnes[" + i + "] = " + countOnes[i] + " countZeros[" + i + "] = " + countZeros[i]
+					+ " Ratio = " + ((float) countOnes[i] / ((float) countOnes[i] + (float) countZeros[i])));
+		}
+	}
 	
-		System.out.println("\nuncompressedSignificands (2nd try on XOR):");
-		for (int significand : uncompressedSignificands)
-			System.out.print("00000000000000000000000000000000".substring(Integer.toBinaryString(significand).length()) + Integer.toBinaryString(significand) + " ");
-		
+	private static void countOnesAndZeros(int[] input) {
+		int countOnes = 0;
+		int countZeros = 0;
+		for (int value : input) {
+			int numberOfOnes = Integer.bitCount(value);
+			System.out.println("00000000000000000000000000000000".substring(Integer.toBinaryString(value).length())
+					+ Integer.toBinaryString(value) + " has " + numberOfOnes + " bits(s) set to 1");
+			countOnes += numberOfOnes;
+			countZeros += 32 - numberOfOnes;
+		}
+		System.out.println("countOnes = " + countOnes + " countZeros = " + countZeros + " Ratio = "
+				+ ((float) countOnes / ((float) countOnes + (float) countZeros)));
 	}
 	
 	public static long[] deltaValEncode (long[] uncompressed) {
@@ -149,10 +176,8 @@ public class Compression {
 		
 		// Find the min and max in the set to figure out the range
 		for (long v : uncompressed) {
-			if (v > max)
-				max = v;
-			if (v < min)
-				min = v;
+			max = v > max ? v : max;
+			min = v < min ? v : min;
 		}
 		
 		// Determine the number of bits needed to encode the delta from the minimum
@@ -215,10 +240,8 @@ public class Compression {
 		
 		// Find the min and max in the set to figure out the range
 		for (int v : uncompressed) {
-			if (v > max)
-				max = v;
-			if (v < min)
-				min = v;
+			max = v > max ? v : max;
+			min = v < min ? v : min;
 		}
 		
 		// Determine the number of bits needed to encode the delta from the minimum
@@ -476,7 +499,7 @@ public class Compression {
 	}
 	
 	public static void testDeltaXorWithFloats() {
-		float[] test = new float[1024];
+		float[] test = new float[8192];
 		test[0] = 1.1f;
 		for (int i = 1 ; i < test.length; i++)
 			test[i] = test[i - 1] + (float)Math.random();
