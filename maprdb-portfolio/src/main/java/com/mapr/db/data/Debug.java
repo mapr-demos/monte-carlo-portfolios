@@ -40,18 +40,35 @@ public class Debug {
 
 	static void compareByteBuffers(byte[] reference, byte[] other, String beginning) {		
         if (reference == null || other == null || reference.length != other.length ) {
-        	System.err.println(beginning + "Buffers are different or one of them is empty.");
+        	System.err.println(beginning + " Buffers are different or one of them is empty.");
         	return;
         }
 
 		for (int i = 0; i < reference.length; i++)
 			if (reference[i] != other[i]) {
-				System.err.println(beginning + "Difference detected between buffers.");
+				System.err.println(beginning + " Difference detected between buffers.");
 				Debug.dump(reference);
 				Debug.dump(other);
 				return;
 			}
 		
-		System.err.println(beginning + "Buffers are identical.");
+		System.out.println(beginning + " Buffers are identical.");
+	}
+
+	static void compareIntegerBuffers(int[] reference, int[] other, String beginning) {		
+        if (reference == null || other == null || reference.length != other.length ) {
+        	System.err.println(beginning + " Buffers are different or one of them is empty.");
+        	return;
+        }
+
+		for (int i = 0; i < reference.length; i++)
+			if (reference[i] != other[i]) {
+				System.err.println(beginning + " Difference detected between buffers.");
+				Debug.dump(reference);
+				Debug.dump(other);
+				return;
+			}
+		
+		System.out.println(beginning + " Buffers are identical.");
 	}
 }
