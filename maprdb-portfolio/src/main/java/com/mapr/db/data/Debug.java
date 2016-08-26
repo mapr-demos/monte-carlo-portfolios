@@ -71,4 +71,21 @@ public class Debug {
 		
 		System.out.println(beginning + " Buffers are identical.");
 	}
+
+	static void compareFloatBuffers(float[] reference, float[] other, String beginning) {		
+        if (reference == null || other == null || reference.length != other.length ) {
+        	System.err.println(beginning + " Buffers are different or one of them is empty.");
+        	return;
+        }
+
+		for (int i = 0; i < reference.length; i++)
+			if (reference[i] != other[i]) {
+				System.err.println(beginning + " Difference detected between buffers.");
+				Debug.dump(reference);
+				Debug.dump(other);
+				return;
+			}
+		
+		System.out.println(beginning + " Buffers are identical.");
+	}
 }
