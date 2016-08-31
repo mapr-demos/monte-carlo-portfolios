@@ -57,56 +57,13 @@ public class Compression {
 		int exponentOffset    = 0;
 		int significandOffset = 0;
 
-		if (compare) {
-			// Retrieve the significands as is, without a XOR
-			for (int idx = 0; idx < uncompressedInts.length; idx++) {
-				int currentInt = uncompressedInts[idx];
-				// Mask the bits we want
-				writeBits(uncompressedSignificands, currentInt & 0b00000000011111111111111111111111, significandOffset, 23, false);
-				significandOffset += 23;
-			}
-
-			// ----------------------------------------------------------
-			// ---------------------- Significands no XOR----------------
-			// ----------------------------------------------------------
-			// x4 because we use an array of ints
-			System.out.println("\nuncompressedSignificands no XOR: size = " + uncompressedSignificands.length * 4 + " bytes");
-			byte[] gzipCompressedSignificandsNoXOR = null;
-			try {
-				gzipCompressedSignificandsNoXOR = compressGzip(BitManipulationHelper.intsToBytes(uncompressedSignificands, 0, uncompressedSignificands.length));
-				System.out.println("GZIP No XOR: size = " + gzipCompressedSignificandsNoXOR.length + " bytes");
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-
-			byte[] zipCompressedSignificandsNoXOR = null;
-			try {
-				zipCompressedSignificandsNoXOR = compressZip(BitManipulationHelper.intsToBytes(uncompressedSignificands, 0, uncompressedSignificands.length));
-				System.out.println("ZIP  No XOR: size = " + zipCompressedSignificandsNoXOR.length + " bytes");
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-		}		
-		
-//		if (debug) {
-//			System.out.println("\nuncompressedSignificands (no XOR):");
-//			countOnesAndZeros(uncompressedSignificands);
-//		}
-		
-		// Transpose the significands and compute the numbers of bits set to 1 per row (i.e. column in the original data set)
-//		if (debug) {
-//			System.out.println("\nTranspose and count the significands:");
-//			countOnesAndZerosTransposed32(uncompressedSignificands);
-//		}
-		
-		
-		// XOR the exponents and the significand
+		// XOR the exponents and the significands
 		signOffset        = 0;
 		exponentOffset    = 0;
 		significandOffset = 0;
 
 		int previousInt = uncompressedInts[0];
-		writeBits(uncompressedSigns, uncompressedInts[0] >>> 31, signOffset++, 1, false);
+		writeBits(uncompressedSigns, uncompressedInts[0] >>> 31, signOffset, 1, false);
 		writeBits(uncompressedExponents,   (uncompressedInts[0] & 0b01111111100000000000000000000000) >>> 23, exponentOffset, 8, false); // Mask the bits we want
 		writeBits(uncompressedSignificands, uncompressedInts[0] & 0b00000000011111111111111111111111        , significandOffset, 23, false); // Mask the bits we want
 
@@ -114,13 +71,14 @@ public class Compression {
 			binaryPrint("  compress raw exp: ", uncompressedInts[0] & 0b01111111100000000000000000000000);
 		}
 		
+		signOffset++;
 		exponentOffset    += 8;
 		significandOffset += 23;
 
 		for (int idx = 1; idx < uncompressedInts.length; idx++) {
 			int currentInt = uncompressedInts[idx];
 			// Push the bit sign all the way. The triple chevron is so we push 0 from the MSB
-			writeBits(uncompressedSigns, currentInt >>> 31, signOffset++, 1, false);
+			writeBits(uncompressedSigns, currentInt >>> 31, signOffset, 1, false);
 			// Mask the bits we want
 			writeBits(uncompressedExponents,   ((previousInt ^ currentInt) & 0b01111111100000000000000000000000) >>> 23, exponentOffset, 8, false);
 			if (debug) {
@@ -128,14 +86,13 @@ public class Compression {
 				binaryPrint("  compress XOR exp: ", (previousInt ^ currentInt) & 0b01111111100000000000000000000000);
 			}
 			writeBits(uncompressedSignificands, (previousInt ^ currentInt) & 0b00000000011111111111111111111111        , significandOffset, 23, false);
+			signOffset++;
 			exponentOffset    += 8;
 			significandOffset += 23;
 			previousInt = currentInt;
 		}
 		
 		if (debug) {
-//			System.out.println("\nuncompressedSigns:");
-//			countOnesAndZeros(uncompressedSigns);
 			uncompressedInts[0] &= 0b01111111100000000000000000000000;
 			previousInt = uncompressedInts[0];
 			for (int idx = 1; idx < uncompressedInts.length; idx++) {
@@ -143,14 +100,6 @@ public class Compression {
 				uncompressedInts[idx] = (previousInt ^ currentInt) & 0b01111111100000000000000000000000;
 				previousInt = currentInt;
 			}
-			
-//			System.out.println("\nuncompressedInts:");
-//			countOnesAndZeros(uncompressedInts);
-//			System.out.println("\nuncompressedExponents:");
-//			countOnesAndZeros(uncompressedExponents);
-
-//			System.out.println("\nuncompressedSignificands (1st try on XOR):");
-//			countOnesAndZeros(uncompressedSignificands);
 		}
 
 		// Let's deflate those arrays independently
@@ -159,6 +108,9 @@ public class Compression {
 		// ---------------------- Signs --------------------------
 		// -------------------------------------------------------
 
+		byte[] bestCompressedSigns = null, bestCompressedExponents = null, bestCompressedSignificands = null;
+		CompressionAlgorithms bestSignsAlgorithm = null, bestExponentsAlgorithm = null, bestSignificandsAlgorithm = null;
+		
 		int uncompressedSize = 0;
 		int gzipSize = 0;
 		int  zipSize = 0;
@@ -167,9 +119,12 @@ public class Compression {
 			System.out.println("\nuncompressedSigns: size = " + uncompressedSigns.length * 4 + " bytes"); // x4 because we use an array of ints.
 			uncompressedSize += uncompressedSigns.length * 4;
 		}
+
 		byte[] gzipCompressedSigns = null;
 		try {
 			gzipCompressedSigns = compressGzip(BitManipulationHelper.intsToBytes(uncompressedSigns, 0, uncompressedSigns.length));
+			bestCompressedSigns = gzipCompressedSigns;
+			bestSignsAlgorithm = CompressionAlgorithms.GZIP;
 			if (stats) {
 				System.out.println("GZIP: size = " + gzipCompressedSigns.length + " bytes");
 				gzipSize += gzipCompressedSigns.length;
@@ -181,6 +136,10 @@ public class Compression {
 		byte[] zipCompressedSigns = null;
 		try {
 			zipCompressedSigns = compressZip(BitManipulationHelper.intsToBytes(uncompressedSigns, 0, uncompressedSigns.length));
+			if (bestCompressedSigns == null || zipCompressedSigns.length < bestCompressedSigns.length) {
+				bestCompressedSigns = zipCompressedSigns;
+				bestSignsAlgorithm  = CompressionAlgorithms.ZIP;
+			}
 			if (stats) {
 				System.out.println("ZIP:  size = " + zipCompressedSigns.length + " bytes");
 				zipSize += zipCompressedSigns.length;
@@ -196,9 +155,12 @@ public class Compression {
 			System.out.println("\nuncompressedExponents: size = " + uncompressedExponents.length * 4 + " bytes"); // x4 because we use an array of ints.
 			uncompressedSize += uncompressedExponents.length * 4;
 		}
+
 		byte[] gzipCompressedExponents = null;
 		try {
 			gzipCompressedExponents = compressGzip(BitManipulationHelper.intsToBytes(uncompressedExponents, 0, uncompressedExponents.length));
+			bestCompressedExponents = gzipCompressedExponents;
+			bestExponentsAlgorithm  = CompressionAlgorithms.GZIP;
 			if (stats) {
 				System.out.println("GZIP: size = " + gzipCompressedExponents.length + " bytes");
 				gzipSize += gzipCompressedExponents.length;
@@ -210,6 +172,10 @@ public class Compression {
 		byte[] zipCompressedExponents = null;
 		try {
 			zipCompressedExponents = compressZip(BitManipulationHelper.intsToBytes(uncompressedExponents, 0, uncompressedExponents.length));
+			if (bestCompressedExponents == null || zipCompressedExponents.length < bestCompressedExponents.length) {
+				bestCompressedExponents = zipCompressedExponents;
+				bestExponentsAlgorithm  = CompressionAlgorithms.ZIP;
+			}
 			if (stats) {
 				System.out.println("ZIP:  size = " + zipCompressedExponents.length + " bytes");
 				zipSize += zipCompressedExponents.length;
@@ -225,9 +191,12 @@ public class Compression {
 			System.out.println("\nuncompressedSignificands: size = " + uncompressedSignificands.length * 4 + " bytes"); // x4 because we use an array of ints.
 			uncompressedSize += uncompressedSignificands.length * 4;
 		}
+
 		byte[] gzipCompressedSignificands = null;
 		try {
 			gzipCompressedSignificands = compressGzip(BitManipulationHelper.intsToBytes(uncompressedSignificands, 0, uncompressedSignificands.length));
+			bestCompressedSignificands = gzipCompressedSignificands;
+			bestSignificandsAlgorithm  = CompressionAlgorithms.GZIP;
 			if (stats) {
 				System.out.println("GZIP: size = " + gzipCompressedSignificands.length + " bytes");
 				gzipSize += gzipCompressedSignificands.length;
@@ -239,6 +208,10 @@ public class Compression {
 		byte[] zipCompressedSignificands = null;
 		try {
 			zipCompressedSignificands = compressZip(BitManipulationHelper.intsToBytes(uncompressedSignificands, 0, uncompressedSignificands.length));
+			if (bestCompressedSignificands == null || zipCompressedSignificands.length < bestCompressedSignificands.length) {
+				bestCompressedSignificands = zipCompressedSignificands;
+				bestSignificandsAlgorithm  = CompressionAlgorithms.ZIP;
+			}
 			if (stats) {
 				System.out.println("ZIP:  size = " + zipCompressedSignificands.length + " bytes");
 				zipSize += zipCompressedSignificands.length;
@@ -252,14 +225,15 @@ public class Compression {
 			System.out.println("Total gzip:         " + gzipSize + " ratio: " + gzipSize * 1.0f / uncompressedSize);
 			System.out.println("Total  zip:         " +  zipSize + " ratio: " +  zipSize * 1.0f / uncompressedSize);
 		}
-		return new CompressedFloatArray(zipCompressedSigns.length < gzipCompressedSigns.length ? zipCompressedSigns : gzipCompressedSigns,
-										zipCompressedExponents.length < gzipCompressedExponents.length ? zipCompressedExponents : gzipCompressedExponents,
-										zipCompressedSignificands.length < gzipCompressedSignificands.length ? zipCompressedSignificands : gzipCompressedSignificands,
-										zipCompressedSigns.length < gzipCompressedSigns.length ? CompressionAlgorithms.ZIP : CompressionAlgorithms.GZIP,
-										zipCompressedExponents.length < gzipCompressedExponents.length ? CompressionAlgorithms.ZIP : CompressionAlgorithms.GZIP,
-										zipCompressedSignificands.length < gzipCompressedSignificands.length ? CompressionAlgorithms.ZIP : CompressionAlgorithms.GZIP,
+		
+		return new CompressedFloatArray(bestCompressedSigns,
+										bestCompressedExponents,
+										bestCompressedSignificands,
+										bestSignsAlgorithm,
+										bestExponentsAlgorithm,
+										bestSignificandsAlgorithm,
 										uncompressed.length,
-										CompressedFloatArray.WIDTH.THIRTY_TWO);
+										CompressedFloatArray.WIDTH.THIRTY_TWO); // We did everything for 32-bit floats
 
 	}
 
