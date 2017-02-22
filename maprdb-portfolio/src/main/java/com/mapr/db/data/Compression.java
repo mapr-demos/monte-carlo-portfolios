@@ -248,7 +248,7 @@ public class Compression {
 			if (compressed == null)
 				return null;
 			
-			if (compressed.width != CompressedFloatArray.WIDTH.THIRTY_TWO) {
+			if (compressed.width == null || compressed.width != CompressedFloatArray.WIDTH.THIRTY_TWO) {
 				System.err.println("Wrong format. Should be 32 bits.");
 				return null;
 			}
