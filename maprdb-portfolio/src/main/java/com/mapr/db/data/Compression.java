@@ -12,634 +12,642 @@ import java.util.zip.Inflater;
 
 public class Compression {
 
-	private static boolean debug = false;
-	private static boolean stats = true;
-	private static boolean compare = false;
+    private static boolean debug = false;
+    private static boolean stats = true;
+    private static boolean compare = false;
 
-	public static CompressedFloatArray deltaXorEncode(float[] uncompressed) {
-		/*
+    public static CompressedFloatArray deltaXorEncode(float[] uncompressed) {
+        /*
 		The IEEE 754 standard specifies a binary32 as having:
-			Sign bit: 1 bit
-			Exponent width: 8 bits
-			Significand precision: 24 bits (23 explicitly stored)
+			Sign:         1 bit
+			Exponent:     8 bits
+			Significand: 24 bits (23 explicitly stored)
 		*/
 		
 		/* 
-		 * We retrieve the three components of an IEEE 754 float
-		 * The signs are retrieved as is and then comressed (ZIP or GZIP)
+		 * We retrieve the three components of an IEEE 754 float (32 bits)
+		 * The signs are retrieved as is and then compressed (ZIP or GZIP)
 		 * The exponents and significands are XOR'ed and then compressed (ZIP or GZIP)
 		 */
-		
-		int[] uncompressedInts = BitManipulationHelper.floatsToInts(uncompressed, 0, uncompressed.length);
-		
-		int numberOfSignInts;
-		if (uncompressedInts.length % 32 == 0) // No multiplication here because the sign is stored on 1 bit only
-			numberOfSignInts = uncompressedInts.length / 32; // Divide by 32
-		else
-			numberOfSignInts = 1 + uncompressedInts.length / 32; // +1 to make room for the extra bits that wont fit			
-		int[] uncompressedSigns = new int [numberOfSignInts];
 
-		int numberOfExponentInts;
-		if ((uncompressedInts.length * 8) % 32 == 0) // x8 because we need 8 bits to store the exponent
-			numberOfExponentInts = uncompressedInts.length * 8 / 32;
-		else
-			numberOfExponentInts = 1 + uncompressedInts.length * 8 / 32;
-		int[] uncompressedExponents = new int [numberOfExponentInts];
-		
-		int numberOfSignificandInts;
-		if ((uncompressedInts.length * 23) % 32 == 0) // x23 because we need 23 bits to store the significand
-			numberOfSignificandInts = uncompressedInts.length * 23 / 32;
-		else
-			numberOfSignificandInts = 1 + uncompressedInts.length * 23 / 32;
-		int[] uncompressedSignificands = new int [numberOfSignificandInts];
+        int[] uncompressedInts = BitManipulationHelper.floatsToInts(uncompressed, 0, uncompressed.length);
 
-		int signOffset        = 0;
-		int exponentOffset    = 0;
-		int significandOffset = 0;
+        int numberOfSignInts;
+        if ((uncompressedInts.length * 1) % 32 == 0)             // x1 because the sign is stored on 1 bit.
+            numberOfSignInts = uncompressedInts.length * 1 / 32; // Divide by 32 bits per float
+        else
+            numberOfSignInts = 1 + uncompressedInts.length / 32; // +1 to make room for the extra bits that won't fit
+        int[] uncompressedSigns = new int[numberOfSignInts];
 
-		// XOR the exponents and the significands
-		signOffset        = 0;
-		exponentOffset    = 0;
-		significandOffset = 0;
+        int numberOfExponentInts;
+        if ((uncompressedInts.length * 8) % 32 == 0)             // x8 because the exponent is stored on 8 bits
+            numberOfExponentInts = uncompressedInts.length * 8 / 32; // Divide by 32 bits per float
+        else
+            numberOfExponentInts = 1 + uncompressedInts.length * 8 / 32; // +1 to make room for the extra bits that won't fit
+        int[] uncompressedExponents = new int[numberOfExponentInts];
 
-		int previousInt = uncompressedInts[0];
-		writeBits(uncompressedSigns, uncompressedInts[0] >>> 31, signOffset, 1, false);
-		writeBits(uncompressedExponents,   (uncompressedInts[0] & 0b01111111100000000000000000000000) >>> 23, exponentOffset, 8, false); // Mask the bits we want
-		writeBits(uncompressedSignificands, uncompressedInts[0] & 0b00000000011111111111111111111111        , significandOffset, 23, false); // Mask the bits we want
+        int numberOfSignificandInts;
+        if ((uncompressedInts.length * 23) % 32 == 0)            // x23 because the significand is stored on 23 bits
+            numberOfSignificandInts = uncompressedInts.length * 23 / 32; // Divide by 32 bits per float
+        else
+            numberOfSignificandInts = 1 + uncompressedInts.length * 23 / 32; // +1 to make room for the extra bits that won't fit
+        int[] uncompressedSignificands = new int[numberOfSignificandInts];
 
-		if (debug) {
-			binaryPrint("  compress raw exp: ", uncompressedInts[0] & 0b01111111100000000000000000000000);
-		}
-		
-		signOffset++;
-		exponentOffset    += 8;
-		significandOffset += 23;
+        int signOffset = 0;
+        int exponentOffset = 0;
+        int significandOffset = 0;
 
-		for (int idx = 1; idx < uncompressedInts.length; idx++) {
-			int currentInt = uncompressedInts[idx];
-			// Push the bit sign all the way. The triple chevron is so we push 0 from the MSB
-			writeBits(uncompressedSigns, currentInt >>> 31, signOffset, 1, false);
-			// Mask the bits we want
-			writeBits(uncompressedExponents,   ((previousInt ^ currentInt) & 0b01111111100000000000000000000000) >>> 23, exponentOffset, 8, false);
-			if (debug) {
-				binaryPrint("  compress raw exp: ", currentInt & 0b01111111100000000000000000000000);
-				binaryPrint("  compress XOR exp: ", (previousInt ^ currentInt) & 0b01111111100000000000000000000000);
-			}
-			writeBits(uncompressedSignificands, (previousInt ^ currentInt) & 0b00000000011111111111111111111111        , significandOffset, 23, false);
-			signOffset++;
-			exponentOffset    += 8;
-			significandOffset += 23;
-			previousInt = currentInt;
-		}
-		
-		if (debug) {
-			uncompressedInts[0] &= 0b01111111100000000000000000000000;
-			previousInt = uncompressedInts[0];
-			for (int idx = 1; idx < uncompressedInts.length; idx++) {
-				int currentInt = uncompressedInts[idx];
-				uncompressedInts[idx] = (previousInt ^ currentInt) & 0b01111111100000000000000000000000;
-				previousInt = currentInt;
-			}
-		}
+        // XOR the exponents and the significands
+        signOffset = 0;
+        exponentOffset = 0;
+        significandOffset = 0;
 
-		// Let's deflate those arrays independently
+        int previousInt = uncompressedInts[0];
+        writeBits(uncompressedSigns, uncompressedInts[0] >>> 31, signOffset, 1, false);
+        writeBits(uncompressedExponents, (uncompressedInts[0] & 0b01111111100000000000000000000000) >>> 23, exponentOffset, 8, false); // Mask the bits we want
+        writeBits(uncompressedSignificands, uncompressedInts[0] & 0b00000000011111111111111111111111, significandOffset, 23, false); // Mask the bits we want
 
-		// -------------------------------------------------------
-		// ---------------------- Signs --------------------------
-		// -------------------------------------------------------
+        if (debug) {
+            binaryPrint("  compress raw exp: ", uncompressedInts[0] & 0b01111111100000000000000000000000);
+        }
 
-		byte[] bestCompressedSigns = null, bestCompressedExponents = null, bestCompressedSignificands = null;
-		CompressionAlgorithms bestSignsAlgorithm = null, bestExponentsAlgorithm = null, bestSignificandsAlgorithm = null;
-		
-		int uncompressedSize = 0;
-		int gzipSize = 0;
-		int  zipSize = 0;
-		
-		if (stats) {
-			System.out.println("\nuncompressedSigns: size = " + uncompressedSigns.length * 4 + " bytes"); // x4 because we use an array of ints.
-			uncompressedSize += uncompressedSigns.length * 4;
-		}
+        signOffset++;
+        exponentOffset += 8;
+        significandOffset += 23;
 
-		byte[] gzipCompressedSigns;
-		try {
-			gzipCompressedSigns = compressGzip(BitManipulationHelper.intsToBytes(uncompressedSigns, 0, uncompressedSigns.length));
-			bestCompressedSigns = gzipCompressedSigns;
-			bestSignsAlgorithm = CompressionAlgorithms.GZIP;
-			if (stats) {
-				System.out.println("GZIP: size = " + gzipCompressedSigns.length + " bytes");
-				gzipSize += gzipCompressedSigns.length;
-			}
-		} catch (IOException e1) {
-			e1.printStackTrace();
-		}
+        for (int idx = 1; idx < uncompressedInts.length; idx++) {
+            int currentInt = uncompressedInts[idx];
+            // Push the bit sign all the way. The triple chevron is so we push 0 from the MSB
+            writeBits(uncompressedSigns, currentInt >>> 31, signOffset, 1, false);
+            // Mask the bits we want
+            writeBits(uncompressedExponents, ((previousInt ^ currentInt) & 0b01111111100000000000000000000000) >>> 23, exponentOffset, 8, false);
+            if (debug) {
+                binaryPrint("  compress raw exp: ", currentInt & 0b01111111100000000000000000000000);
+                binaryPrint("  compress XOR exp: ", (previousInt ^ currentInt) & 0b01111111100000000000000000000000);
+            }
+            // XOR with the previous integer
+            writeBits(uncompressedSignificands, (previousInt ^ currentInt) & 0b00000000011111111111111111111111, significandOffset, 23, false);
+            signOffset++;
+            exponentOffset += 8;
+            significandOffset += 23;
+            previousInt = currentInt;
+        }
 
-		byte[] zipCompressedSigns;
-		try {
-			zipCompressedSigns = compressZip(BitManipulationHelper.intsToBytes(uncompressedSigns, 0, uncompressedSigns.length));
-			if (bestCompressedSigns == null || zipCompressedSigns.length < bestCompressedSigns.length) {
-				bestCompressedSigns = zipCompressedSigns;
-				bestSignsAlgorithm  = CompressionAlgorithms.ZIP;
-			}
-			if (stats) {
-				System.out.println("ZIP:  size = " + zipCompressedSigns.length + " bytes");
-				zipSize += zipCompressedSigns.length;
-			}
-		} catch (Exception e1) {
-			e1.printStackTrace();
-		}
+        if (debug) {
+            uncompressedInts[0] &= 0b01111111100000000000000000000000;
+            previousInt = uncompressedInts[0];
+            for (int idx = 1; idx < uncompressedInts.length; idx++) {
+                int currentInt = uncompressedInts[idx];
+                uncompressedInts[idx] = (previousInt ^ currentInt) & 0b01111111100000000000000000000000;
+                previousInt = currentInt;
+            }
+        }
 
-		// -------------------------------------------------------
-		// ---------------------- Exponents ----------------------
-		// -------------------------------------------------------
-		if (stats) {
-			System.out.println("\nuncompressedExponents: size = " + uncompressedExponents.length * 4 + " bytes"); // x4 because we use an array of ints.
-			uncompressedSize += uncompressedExponents.length * 4;
-		}
+        // Let's deflate those arrays independently
 
-		byte[] gzipCompressedExponents;
-		try {
-			gzipCompressedExponents = compressGzip(BitManipulationHelper.intsToBytes(uncompressedExponents, 0, uncompressedExponents.length));
-			bestCompressedExponents = gzipCompressedExponents;
-			bestExponentsAlgorithm  = CompressionAlgorithms.GZIP;
-			if (stats) {
-				System.out.println("GZIP: size = " + gzipCompressedExponents.length + " bytes");
-				gzipSize += gzipCompressedExponents.length;
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+        // -------------------------------------------------------
+        // ---------------------- Signs --------------------------
+        // -------------------------------------------------------
 
-		byte[] zipCompressedExponents;
-		try {
-			zipCompressedExponents = compressZip(BitManipulationHelper.intsToBytes(uncompressedExponents, 0, uncompressedExponents.length));
-			if (bestCompressedExponents == null || zipCompressedExponents.length < bestCompressedExponents.length) {
-				bestCompressedExponents = zipCompressedExponents;
-				bestExponentsAlgorithm  = CompressionAlgorithms.ZIP;
-			}
-			if (stats) {
-				System.out.println("ZIP:  size = " + zipCompressedExponents.length + " bytes");
-				zipSize += zipCompressedExponents.length;
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		
-		// ----------------------------------------------------------
-		// ---------------------- Significands ----------------------
-		// ----------------------------------------------------------
-		if (stats) {
-			System.out.println("\nuncompressedSignificands: size = " + uncompressedSignificands.length * 4 + " bytes"); // x4 because we use an array of ints.
-			uncompressedSize += uncompressedSignificands.length * 4;
-		}
+        byte[] bestCompressedSigns = null, bestCompressedExponents = null, bestCompressedSignificands = null;
+        CompressionAlgorithms bestSignsAlgorithm = null, bestExponentsAlgorithm = null, bestSignificandsAlgorithm = null;
 
-		byte[] gzipCompressedSignificands;
-		try {
-			gzipCompressedSignificands = compressGzip(BitManipulationHelper.intsToBytes(uncompressedSignificands, 0, uncompressedSignificands.length));
-			bestCompressedSignificands = gzipCompressedSignificands;
-			bestSignificandsAlgorithm  = CompressionAlgorithms.GZIP;
-			if (stats) {
-				System.out.println("GZIP: size = " + gzipCompressedSignificands.length + " bytes");
-				gzipSize += gzipCompressedSignificands.length;
-			}
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+        int uncompressedSize = 0;
+        int gzipSize = 0;
+        int zipSize = 0;
 
-		byte[] zipCompressedSignificands;
-		try {
-			zipCompressedSignificands = compressZip(BitManipulationHelper.intsToBytes(uncompressedSignificands, 0, uncompressedSignificands.length));
-			if (bestCompressedSignificands == null || zipCompressedSignificands.length < bestCompressedSignificands.length) {
-				bestCompressedSignificands = zipCompressedSignificands;
-				bestSignificandsAlgorithm  = CompressionAlgorithms.ZIP;
-			}
-			if (stats) {
-				System.out.println("ZIP:  size = " + zipCompressedSignificands.length + " bytes");
-				zipSize += zipCompressedSignificands.length;
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+        if (stats) {
+            System.out.println("\nuncompressedSigns: size = " + uncompressedSigns.length * 4 + " bytes"); // x4 because we use an array of ints (32 bits = 4 bytes)
+            uncompressedSize += uncompressedSigns.length * 4;
+        }
 
-		if (stats) {
-			System.out.println("Total uncompressed: " + uncompressedSize);
-			System.out.println("Total gzip:         " + gzipSize + " ratio: " + gzipSize * 1.0f / uncompressedSize);
-			System.out.println("Total  zip:         " +  zipSize + " ratio: " +  zipSize * 1.0f / uncompressedSize);
-		}
-		
-		return new CompressedFloatArray(bestCompressedSigns,
-										bestCompressedExponents,
-										bestCompressedSignificands,
-										bestSignsAlgorithm,
-										bestExponentsAlgorithm,
-										bestSignificandsAlgorithm,
-										uncompressed.length,
-										CompressedFloatArray.WIDTH.THIRTY_TWO); // We did everything for 32-bit floats
+        byte[] gzipCompressedSigns;
+        try {
+            gzipCompressedSigns = compressGzip(BitManipulationHelper.intsToBytes(uncompressedSigns, 0, uncompressedSigns.length));
+            bestCompressedSigns = gzipCompressedSigns;
+            bestSignsAlgorithm = CompressionAlgorithms.GZIP;
+            if (stats) {
+                System.out.println("GZIP: size = " + gzipCompressedSigns.length + " bytes");
+                gzipSize += gzipCompressedSigns.length;
+            }
+        } catch (IOException e1) {
+            e1.printStackTrace();
+        }
 
-	}
+        byte[] zipCompressedSigns;
+        try {
+            zipCompressedSigns = compressZip(BitManipulationHelper.intsToBytes(uncompressedSigns, 0, uncompressedSigns.length));
+            if (bestCompressedSigns == null || zipCompressedSigns.length < bestCompressedSigns.length) {
+                bestCompressedSigns = zipCompressedSigns;
+                bestSignsAlgorithm = CompressionAlgorithms.ZIP;
+            }
+            if (stats) {
+                System.out.println("ZIP:  size = " + zipCompressedSigns.length + " bytes");
+                zipSize += zipCompressedSigns.length;
+            }
+        } catch (Exception e1) {
+            e1.printStackTrace();
+        }
 
-	public static float[] deltaXorDecode(CompressedFloatArray compressed) throws Exception {
-			/*
-			The IEEE 754 standard specifies a binary32 as having:
-				Sign bit: 1 bit
-				Exponent width: 8 bits
-				Significand precision: 24 bits (23 explicitly stored)
-			*/
-			
-			if (compressed == null)
-				return null;
-			
-			if (compressed.width == null || compressed.width != CompressedFloatArray.WIDTH.THIRTY_TWO) {
-				System.err.println("Wrong format. Should be 32 bits.");
-				return null;
-			}
-			
-			if (compressed.uncompressedArrayLength <= 0) {
-				System.err.println("Wrong length. Should be greater than 0. Length = " + compressed.uncompressedArrayLength);
-				return null;
-			}
-				
-			// decompress the 3 components
-	
-			int[] decompressedSigns = null;
-			if (compressed.signsAlgorithm == CompressionAlgorithms.GZIP)
-				decompressedSigns = BitManipulationHelper.bytesToInts(uncompressGzip(compressed.compressedSigns));
-			
-			if (compressed.signsAlgorithm == CompressionAlgorithms.ZIP)
-				decompressedSigns = BitManipulationHelper.bytesToInts(uncompressZip(compressed.compressedSigns));
-			
-			if (decompressedSigns == null) {
-				System.err.println("Unknown compression algorithm for signs.");
-				return null;
-			}
-	
-			int[] decompressedExponents = null;
-			if (compressed.exponentsAlgorithm == CompressionAlgorithms.GZIP)
-				decompressedExponents = BitManipulationHelper.bytesToInts(uncompressGzip(compressed.compressedExponents));
-			
-			if (compressed.exponentsAlgorithm == CompressionAlgorithms.ZIP)
-				decompressedExponents = BitManipulationHelper.bytesToInts(uncompressZip(compressed.compressedExponents));
-			
-			if (decompressedExponents == null) {
-				System.err.println("Unknown compression algorithm for exponents.");
-				return null;
-			}
-			
-			int[] decompressedSignificands = null;
-			if (compressed.significandsAlgorithm == CompressionAlgorithms.GZIP)
-				decompressedSignificands = BitManipulationHelper.bytesToInts(uncompressGzip(compressed.compressedSignificands));
-			
-			if (compressed.significandsAlgorithm == CompressionAlgorithms.ZIP)
-				decompressedSignificands = BitManipulationHelper.bytesToInts(uncompressZip(compressed.compressedSignificands));
-			
-			if (decompressedSignificands == null) {
-				System.err.println("Unknown compression algorithm for significands.");
-				return null;
-			}
-			
-			
-			// Rebuild the array of floats
-			int signOffset        = 0;
-			int exponentOffset    = 0;
-			int significandOffset = 0;
-	
-			int[] decompressedAsInts = new int [compressed.uncompressedArrayLength];
-			
-			for (int i = 0; i < decompressedAsInts.length; i++) {
-				int decompressedSign        = readBits(decompressedSigns, signOffset, 1);
-				int decompressedExponent    = readBits(decompressedExponents, exponentOffset, 8);
-				int decompressedSignificand = readBits(decompressedSignificands, significandOffset, 23);
-				
-				decompressedSign     <<= 31;
-				decompressedExponent <<= (31 - 8);
-				decompressedAsInts[i] = decompressedSign | decompressedExponent | decompressedSignificand;
-				signOffset++;
-				exponentOffset    += 8;
-				significandOffset += 23;
-			}		
-			
-			int previousInt         = decompressedAsInts[0];
-			int previousExponent    = previousInt & 0b01111111100000000000000000000000;
-			int previousSignificand = previousInt & 0b00000000011111111111111111111111;
-			
-			// XOR the exponents and significands
-			for (int i = 1; i < decompressedAsInts.length; i++) {
-				int currentSign        = decompressedAsInts[i] & 0b10000000000000000000000000000000;
-				int currentExponent    = decompressedAsInts[i] & 0b01111111100000000000000000000000;
-				int currentSignificand = decompressedAsInts[i] & 0b00000000011111111111111111111111;
-	
-				if (debug) {
-					binaryPrint("decompress raw exp: ", decompressedAsInts[i] & 0b01111111100000000000000000000000);
-					binaryPrint("decompress xor exp: ", previousExponent ^ currentExponent);
-				}
+        // -------------------------------------------------------
+        // ---------------------- Exponents ----------------------
+        // -------------------------------------------------------
+        if (stats) {
+            System.out.println("\nuncompressedExponents: size = " + uncompressedExponents.length * 4 + " bytes"); // x4 because we use an array of ints.
+            uncompressedSize += uncompressedExponents.length * 4;
+        }
 
-				decompressedAsInts[i] = currentSign | (previousExponent ^ currentExponent) | (previousSignificand ^ currentSignificand);
-				previousExponent    = previousExponent ^ currentExponent;
-				previousSignificand = previousSignificand ^ currentSignificand;
-			}
-			
-			return BitManipulationHelper.intsToFloats(decompressedAsInts);
-		}
+        byte[] gzipCompressedExponents;
+        try {
+            gzipCompressedExponents = compressGzip(BitManipulationHelper.intsToBytes(uncompressedExponents, 0, uncompressedExponents.length));
+            bestCompressedExponents = gzipCompressedExponents;
+            bestExponentsAlgorithm = CompressionAlgorithms.GZIP;
+            if (stats) {
+                System.out.println("GZIP: size = " + gzipCompressedExponents.length + " bytes");
+                gzipSize += gzipCompressedExponents.length;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
-	public static byte[] compressGzip(final byte[] input) throws IOException {
-		if (input == null || input.length == 0)
-			return null;
-		ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-		GZIPOutputStream gzipOutputStream = new GZIPOutputStream(outputStream);
-		gzipOutputStream.write(input, 0, input.length);
-		gzipOutputStream.close();
-		return outputStream.toByteArray();
-	}
+        byte[] zipCompressedExponents;
+        try {
+            zipCompressedExponents = compressZip(BitManipulationHelper.intsToBytes(uncompressedExponents, 0, uncompressedExponents.length));
+            if (bestCompressedExponents == null || zipCompressedExponents.length < bestCompressedExponents.length) {
+                bestCompressedExponents = zipCompressedExponents;
+                bestExponentsAlgorithm = CompressionAlgorithms.ZIP;
+            }
+            if (stats) {
+                System.out.println("ZIP:  size = " + zipCompressedExponents.length + " bytes");
+                zipSize += zipCompressedExponents.length;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
-	public static byte[] uncompressGzip(final byte[] input) throws IOException {
-		if (input == null || input.length == 0)
-			return null;
-		ByteArrayInputStream inputStream = new ByteArrayInputStream(input);
-		ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-		GZIPInputStream gzipInputStream = new GZIPInputStream(inputStream);
-		byte[] tmp = new byte[32 * 1024]; // Hard coded for now: 32 kiloBytes
-		while (true) {
-			int read = gzipInputStream.read(tmp);
-			if (read < 0)
-				break;
-			buffer.write(tmp, 0, read);
-		}
-		gzipInputStream.close();
-		return buffer.toByteArray();
-	}
+        // ----------------------------------------------------------
+        // ---------------------- Significands ----------------------
+        // ----------------------------------------------------------
+        if (stats) {
+            System.out.println("\nuncompressedSignificands: size = " + uncompressedSignificands.length * 4 + " bytes"); // x4 because we use an array of ints.
+            uncompressedSize += uncompressedSignificands.length * 4;
+        }
 
-	private static byte[] compressZip(final byte[] input) throws Exception {
-		if (input == null || input.length == 0)
-			return null;
-		ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-		Deflater deflater = new Deflater();
-		deflater.setLevel(Deflater.BEST_COMPRESSION);
-		deflater.setInput(input);
-		deflater.finish();
-		byte[] tmp = new byte[32 * 1024]; // 32 kiloBytes
-		try {
-			while (!deflater.finished()) {
-				int size = deflater.deflate(tmp);
-				outputStream.write(tmp, 0, size);
-			}
-		} catch (Exception ex) {
-			throw ex;
-		} finally {
-			try {
-				if (outputStream != null)
-					outputStream.close();
-			} catch (Exception ex) {
-				throw ex;
-			}
-		}
+        byte[] gzipCompressedSignificands;
+        try {
+            gzipCompressedSignificands = compressGzip(BitManipulationHelper.intsToBytes(uncompressedSignificands, 0, uncompressedSignificands.length));
+            bestCompressedSignificands = gzipCompressedSignificands;
+            bestSignificandsAlgorithm = CompressionAlgorithms.GZIP;
+            if (stats) {
+                System.out.println("GZIP: size = " + gzipCompressedSignificands.length + " bytes");
+                gzipSize += gzipCompressedSignificands.length;
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
-		return outputStream.toByteArray();
-	}
+        byte[] zipCompressedSignificands;
+        try {
+            zipCompressedSignificands = compressZip(BitManipulationHelper.intsToBytes(uncompressedSignificands, 0, uncompressedSignificands.length));
+            if (bestCompressedSignificands == null || zipCompressedSignificands.length < bestCompressedSignificands.length) {
+                bestCompressedSignificands = zipCompressedSignificands;
+                bestSignificandsAlgorithm = CompressionAlgorithms.ZIP;
+            }
+            if (stats) {
+                System.out.println("ZIP:  size = " + zipCompressedSignificands.length + " bytes");
+                zipSize += zipCompressedSignificands.length;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
-	private static byte[] uncompressZip(final byte[] input) throws Exception {
-		if (input == null || input.length == 0)
-			return null;
-		ByteArrayOutputStream outputStream = null;
-		Inflater inflater = new Inflater();
-		inflater.setInput(input);
-		outputStream = new ByteArrayOutputStream();
-		byte[] tmp = new byte[32 * 1024];
-		try {
-			while (!inflater.finished()) {
-				int size = inflater.inflate(tmp);
-				outputStream.write(tmp, 0, size);
-			}
-		} catch (Exception ex) {
-			throw ex;
-		} finally {
-			try {
-				if (outputStream != null)
-					outputStream.close();
-			} catch (Exception ex) {
-				throw ex;
-			}
-		}
+        if (stats) {
+            System.out.println("Total uncompressed: " + uncompressedSize);
+            System.out.println("Total gzip:         " + gzipSize + " ratio: " + gzipSize * 1.0f / uncompressedSize);
+            System.out.println("Total  zip:         " + zipSize + " ratio: " + zipSize * 1.0f / uncompressedSize);
+        }
 
-		return outputStream.toByteArray();
-	}
+        return new CompressedFloatArray(bestCompressedSigns,
+                bestCompressedExponents,
+                bestCompressedSignificands,
+                bestSignsAlgorithm,
+                bestExponentsAlgorithm,
+                bestSignificandsAlgorithm,
+                uncompressed.length,
+                CompressedFloatArray.WIDTH.THIRTY_TWO); // We did everything for 32-bit floats
 
-	/**
-	 * @param uncompressedSignificands
-	 */
-	private static void countOnesAndZerosTransposed32(int[] uncompressedSignificands) {
-		int[] countOnes  = new int[32];
-		int[] countZeros = new int[32];
-		for (int i = 0; i < uncompressedSignificands.length; i += 32) {
-			int[] transposedSignificands = transpose32b(Arrays.copyOfRange(uncompressedSignificands, i, i + 32));
-			int offset = 0;
-			for (int transposedSignificand : transposedSignificands) {
-				int numberOfOnes = Integer.bitCount(transposedSignificand);
-				System.out.println("00000000000000000000000000000000"
-						.substring(Integer.toBinaryString(transposedSignificand).length())
-						+ Integer.toBinaryString(transposedSignificand) + " has "
-						+ numberOfOnes + " bits(s) set to 1");
-				countOnes[offset] += numberOfOnes;
-				countZeros[offset] += 32 - numberOfOnes;
-				offset++;
-			}
-		}
-		for (int i = 0; i < countOnes.length; i++) {
-			System.out.println("countOnes[" + i + "] = " + countOnes[i] + " countZeros[" + i + "] = " + countZeros[i]
-					+ " Ratio = " + ((float) countOnes[i] / ((float) countOnes[i] + (float) countZeros[i])));
-		}
-	}
-	
-	private static void countOnesAndZeros(int[] input) {
-		int countOnes = 0;
-		int countZeros = 0;
-		for (int value : input) {
-			int numberOfOnes = Integer.bitCount(value);
-			System.out.println("00000000000000000000000000000000".substring(Integer.toBinaryString(value).length())
-					+ Integer.toBinaryString(value) + " has " + numberOfOnes + " bits(s) set to 1");
-			countOnes  += numberOfOnes;
-			countZeros += 32 - numberOfOnes;
-		}
-		System.out.println("countOnes = " + countOnes + " countZeros = " + countZeros + " Ratio = "
-				+ ((float) countOnes / ((float) countOnes + (float) countZeros)));
-	}
-	
-	public static long[] deltaValEncode (long[] uncompressed) {
-		long min = Long.MAX_VALUE;
-		long max = Long.MIN_VALUE;
-		
-		// Find the min and max in the set to figure out the range
-		for (long v : uncompressed) {
-			max = v > max ? v : max;
-			min = v < min ? v : min;
-		}
-		
-		// Determine the number of bits needed to encode the delta from the minimum
-		long range = max - min;
-		int numberOfBitsToEncode = 64 - Long.numberOfLeadingZeros(range); 
-		
-		if (debug)
-			System.out.println("Min: " + min + " Max: " + max + " Range: " + range + " Number of bits to encode: " + numberOfBitsToEncode);
+    }
 
-		// Create the resulting aray
-		// + 1 for the first entry that stores the minimum value
-		// + 1 for the number of bits used to encode each delta
-		// + 1 for the number of integers when decompressing
-		int numberOfCompressedLongs = 1 + (numberOfBitsToEncode * uncompressed.length) / 64;
-		long[] compressed = new long[1 + 1 + 1 + numberOfCompressedLongs]; 
+    public static float[] deltaXorDecode(CompressedFloatArray compressed) throws Exception {
+		/*
+		The IEEE 754 standard specifies a binary32 as having:
+			Sign:         1 bit
+			Exponent:     8 bits
+			Significand: 24 bits (23 explicitly stored)
+		*/
 
-		if (debug)
-			System.out.println("numberOfCompressedLongs: " + numberOfCompressedLongs + " uncompressed.length: " + uncompressed.length);
-		
-		compressed[0] = min;
-		// Combine both on 64 bits
-		compressed[1] = ((long)numberOfBitsToEncode ) << 32;
-		compressed[1] |= uncompressed.length;
-		
-		int bitOffset = 2 * 64; // 2 for the 2 entries above x 64 bits each,
-		for (long value : uncompressed) {
-			writeBits(compressed, value - min, bitOffset , numberOfBitsToEncode);
-			bitOffset += numberOfBitsToEncode;
-		}
-		
-		return compressed;
-	}
+        if (compressed == null)
+            return null;
 
-	public static long[] deltaValDecode (long[] compressed) {
+        if (compressed.width == null || compressed.width != CompressedFloatArray.WIDTH.THIRTY_TWO) {
+            System.err.println("Wrong format. Should be 32 bits.");
+            return null;
+        }
 
-		long   min                  = compressed[0];
-		int    numberOfBitsToEncode = (int)(compressed[1] >>> 32);
-		int    numberOfUncompressedLongs = (int)(compressed[1] & 0xFFFFFFFF);
-		
-		if (debug)
-			System.out.println("numberOfUncompressedLongs: " + numberOfUncompressedLongs);
+        if (compressed.uncompressedArrayLength <= 0) {
+            System.err.println("Wrong length. Should be greater than 0. Length = " + compressed.uncompressedArrayLength);
+            return null;
+        }
 
-		long[] uncompressed         = new long[numberOfUncompressedLongs ]; // Keep only the low 32 bits
+        // decompress the 3 components
 
-		if (debug)
-			System.out.println("Min: " + min + " numberOfBitsToEncode: " + numberOfBitsToEncode + " uncompressed.length: " + uncompressed.length);
+        int[] decompressedSigns;
+        switch (compressed.signsAlgorithm) {
+            case NONE:
+                decompressedSigns = BitManipulationHelper.bytesToInts(compressed.compressedSigns);
+                break;
+            case ZIP:
+                decompressedSigns = BitManipulationHelper.bytesToInts(uncompressZip(compressed.compressedSigns));
+                break;
+            case GZIP:
+                decompressedSigns = BitManipulationHelper.bytesToInts(uncompressGzip(compressed.compressedSigns));
+                break;
+            default:
+                System.err.println("Unknown compression algorithm for signs.");
+                return null;
+        }
 
-		int offsetBitsCompressed = 2 * 64; // Skip the first 2 entries above x 64 bits each
-		for (int i = 0; i < uncompressed.length; i++) {
-			uncompressed[i] = min + readBits(compressed, offsetBitsCompressed, numberOfBitsToEncode);
-			offsetBitsCompressed += numberOfBitsToEncode;
-		}
+        int[] decompressedExponents;
+        switch (compressed.exponentsAlgorithm) {
+            case NONE:
+                decompressedExponents = BitManipulationHelper.bytesToInts(compressed.compressedExponents);
+                break;
+            case ZIP:
+                decompressedExponents = BitManipulationHelper.bytesToInts(uncompressZip(compressed.compressedExponents));
+                break;
+            case GZIP:
+                decompressedExponents = BitManipulationHelper.bytesToInts(uncompressGzip(compressed.compressedExponents));
+                break;
+            default:
+                System.err.println("Unknown compression algorithm for exponents.");
+                return null;
+        }
 
-		return uncompressed;
-	}
-	
-	public static int[] deltaValEncode (int[] uncompressed) {
-		int min = Integer.MAX_VALUE;
-		int max = Integer.MIN_VALUE;
-		
-		// Find the min and max in the set to figure out the range
-		for (int v : uncompressed) {
-			max = v > max ? v : max;
-			min = v < min ? v : min;
-		}
-		
-		// Determine the number of bits needed to encode the delta from the minimum
-		int range = max - min;
-		int numberOfBitsToEncode = 32 - Integer.numberOfLeadingZeros(range); 
-		
-		if (debug)
-			System.out.println("Min: " + min + " Max: " + max + " Range: " + range + " Number of bits to encode: " + numberOfBitsToEncode);
+        int[] decompressedSignificands;
+        switch (compressed.significandsAlgorithm) {
+            case NONE:
+                decompressedSignificands = BitManipulationHelper.bytesToInts(compressed.compressedSignificands);
+                break;
+            case ZIP:
+                decompressedSignificands = BitManipulationHelper.bytesToInts(uncompressZip(compressed.compressedSignificands));
+                break;
+            case GZIP:
+                decompressedSignificands = BitManipulationHelper.bytesToInts(uncompressGzip(compressed.compressedSignificands));
+                break;
+            default:
+                System.err.println("Unknown compression algorithm for significands.");
+                return null;
+        }
 
-		// Create the resulting aray
-		// + 1 for the first entry that stores the minimum value
-		// + 1 for the number of bits used to encode each delta
-		// + 1 for the number of integers when decompressing
-		int numberOfCompressedInts = 1 + (numberOfBitsToEncode * uncompressed.length) / 32;
-		int[] compressed = new int[1 + 1 + 1 + numberOfCompressedInts]; 
+        // Rebuild the array of floats
+        int signOffset = 0;
+        int exponentOffset = 0;
+        int significandOffset = 0;
 
-		if (debug)
-			System.out.println("numberOfCompressedInts: " + numberOfCompressedInts + " uncompressed.length: " + uncompressed.length);
-		
-		compressed[0] = min;
-		compressed[1] = numberOfBitsToEncode;
-		compressed[2] = uncompressed.length;
-		
-		int bitOffset = 3 * 32; // 3 for the 3 entries above x 32 bits each,
-		for (int value : uncompressed) {
-			writeBits(compressed, value - min, bitOffset , numberOfBitsToEncode, false);
-			bitOffset += numberOfBitsToEncode;
-		}
-		
-		return compressed;
-	}
+        int[] decompressedAsInts = new int[compressed.uncompressedArrayLength];
 
-	public static int[] deltaValDecode (int[] compressed) {
+        for (int i = 0; i < decompressedAsInts.length; i++) {
+            int decompressedSign = readBits(decompressedSigns, signOffset, 1);
+            int decompressedExponent = readBits(decompressedExponents, exponentOffset, 8);
+            int decompressedSignificand = readBits(decompressedSignificands, significandOffset, 23);
 
-		int min                  = compressed[0];
-		int numberOfBitsToEncode = compressed[1];
-		int[] uncompressed       = new int[compressed[2]];
+            decompressedSign <<= 31;
+            decompressedExponent <<= (31 - 8);
+            decompressedAsInts[i] = decompressedSign | decompressedExponent | decompressedSignificand;
+            signOffset++;
+            exponentOffset += 8;
+            significandOffset += 23;
+        }
 
-		if (debug)
-			System.out.println("Min: " + min + " numberOfBitsToEncode: " + numberOfBitsToEncode + " uncompressed.length: " + uncompressed.length);
+        int previousInt = decompressedAsInts[0];
+        int previousExponent = previousInt & 0b01111111100000000000000000000000;
+        int previousSignificand = previousInt & 0b00000000011111111111111111111111;
 
-		int offsetBitsCompressed = 3 * 32; // Skip the first 3 entries above x 32 bits each
-		for (int i = 0; i < uncompressed.length; i++) {
-			uncompressed[i] = min + readBits(compressed, offsetBitsCompressed, numberOfBitsToEncode);
-			offsetBitsCompressed += numberOfBitsToEncode;
-		}
+        // XOR the exponents and significands
+        for (int i = 1; i < decompressedAsInts.length; i++) {
+            int currentSign = decompressedAsInts[i] & 0b10000000000000000000000000000000;
+            int currentExponent = decompressedAsInts[i] & 0b01111111100000000000000000000000;
+            int currentSignificand = decompressedAsInts[i] & 0b00000000011111111111111111111111;
 
-		return uncompressed;
-	}
-	
+            if (debug) {
+                binaryPrint("decompress raw exp: ", decompressedAsInts[i] & 0b01111111100000000000000000000000);
+                binaryPrint("decompress xor exp: ", previousExponent ^ currentExponent);
+            }
+
+            decompressedAsInts[i] = currentSign | (previousExponent ^ currentExponent) | (previousSignificand ^ currentSignificand);
+            previousExponent = previousExponent ^ currentExponent;
+            previousSignificand = previousSignificand ^ currentSignificand;
+        }
+
+        return BitManipulationHelper.intsToFloats(decompressedAsInts);
+    }
+
+    public static byte[] compressGzip(final byte[] input) throws IOException {
+        if (input == null || input.length == 0)
+            return null;
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        GZIPOutputStream gzipOutputStream = new GZIPOutputStream(outputStream);
+        gzipOutputStream.write(input, 0, input.length);
+        gzipOutputStream.close();
+        return outputStream.toByteArray();
+    }
+
+    public static byte[] uncompressGzip(final byte[] input) throws IOException {
+        if (input == null || input.length == 0)
+            return null;
+        ByteArrayInputStream inputStream = new ByteArrayInputStream(input);
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        GZIPInputStream gzipInputStream = new GZIPInputStream(inputStream);
+        byte[] tmp = new byte[32 * 1024]; // Hard coded for now: 32 kiloBytes
+        while (true) {
+            int read = gzipInputStream.read(tmp);
+            if (read < 0)
+                break;
+            buffer.write(tmp, 0, read);
+        }
+        gzipInputStream.close();
+        return buffer.toByteArray();
+    }
+
+    private static byte[] compressZip(final byte[] input) throws Exception {
+        if (input == null || input.length == 0)
+            return null;
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        Deflater deflater = new Deflater();
+        deflater.setLevel(Deflater.BEST_COMPRESSION);
+        deflater.setInput(input);
+        deflater.finish();
+        byte[] tmp = new byte[32 * 1024]; // 32 kiloBytes
+        try {
+            while (!deflater.finished()) {
+                int size = deflater.deflate(tmp);
+                outputStream.write(tmp, 0, size);
+            }
+        } catch (Exception ex) {
+            throw ex;
+        } finally {
+            try {
+                if (outputStream != null)
+                    outputStream.close();
+            } catch (Exception ex) {
+                throw ex;
+            }
+        }
+
+        return outputStream.toByteArray();
+    }
+
+    private static byte[] uncompressZip(final byte[] input) throws Exception {
+        if (input == null || input.length == 0)
+            return null;
+        ByteArrayOutputStream outputStream = null;
+        Inflater inflater = new Inflater();
+        inflater.setInput(input);
+        outputStream = new ByteArrayOutputStream();
+        byte[] tmp = new byte[32 * 1024];
+        try {
+            while (!inflater.finished()) {
+                int size = inflater.inflate(tmp);
+                outputStream.write(tmp, 0, size);
+            }
+        } catch (Exception ex) {
+            throw ex;
+        } finally {
+            try {
+                if (outputStream != null)
+                    outputStream.close();
+            } catch (Exception ex) {
+                throw ex;
+            }
+        }
+
+        return outputStream.toByteArray();
+    }
+
+    /**
+     * @param uncompressedSignificands
+     */
+    private static void countOnesAndZerosTransposed32(int[] uncompressedSignificands) {
+        int[] countOnes = new int[32];
+        int[] countZeros = new int[32];
+        for (int i = 0; i < uncompressedSignificands.length; i += 32) {
+            int[] transposedSignificands = transpose32b(Arrays.copyOfRange(uncompressedSignificands, i, i + 32));
+            int offset = 0;
+            for (int transposedSignificand : transposedSignificands) {
+                int numberOfOnes = Integer.bitCount(transposedSignificand);
+                System.out.println("00000000000000000000000000000000"
+                        .substring(Integer.toBinaryString(transposedSignificand).length())
+                        + Integer.toBinaryString(transposedSignificand) + " has "
+                        + numberOfOnes + " bits(s) set to 1");
+                countOnes[offset] += numberOfOnes;
+                countZeros[offset] += 32 - numberOfOnes;
+                offset++;
+            }
+        }
+        for (int i = 0; i < countOnes.length; i++) {
+            System.out.println("countOnes[" + i + "] = " + countOnes[i] + " countZeros[" + i + "] = " + countZeros[i]
+                    + " Ratio = " + ((float) countOnes[i] / ((float) countOnes[i] + (float) countZeros[i])));
+        }
+    }
+
+    private static void countOnesAndZeros(int[] input) {
+        int countOnes = 0;
+        int countZeros = 0;
+        for (int value : input) {
+            int numberOfOnes = Integer.bitCount(value);
+            System.out.println("00000000000000000000000000000000".substring(Integer.toBinaryString(value).length())
+                    + Integer.toBinaryString(value) + " has " + numberOfOnes + " bits(s) set to 1");
+            countOnes += numberOfOnes;
+            countZeros += 32 - numberOfOnes;
+        }
+        System.out.println("countOnes = " + countOnes + " countZeros = " + countZeros + " Ratio = "
+                + ((float) countOnes / ((float) countOnes + (float) countZeros)));
+    }
+
+    public static long[] deltaValEncode(long[] uncompressed) {
+        long min = Long.MAX_VALUE;
+        long max = Long.MIN_VALUE;
+
+        // Find the min and max in the set to figure out the range
+        for (long v : uncompressed) {
+            max = v > max ? v : max;
+            min = v < min ? v : min;
+        }
+
+        // Determine the number of bits needed to encode the delta from the minimum
+        long range = max - min;
+        int numberOfBitsToEncode = 64 - Long.numberOfLeadingZeros(range);
+
+        if (debug)
+            System.out.println("Min: " + min + " Max: " + max + " Range: " + range + " Number of bits to encode: " + numberOfBitsToEncode);
+
+        // Create the resulting array
+        // + 1 for the first entry that stores the minimum value
+        // + 1 for the number of bits used to encode each delta
+        // + 1 for the number of longs when decompressing
+        int numberOfCompressedLongs = 1 + (numberOfBitsToEncode * uncompressed.length) / 64;
+        long[] compressed = new long[1 + 1 + 1 + numberOfCompressedLongs];
+
+        if (debug)
+            System.out.println("numberOfCompressedLongs: " + numberOfCompressedLongs + " uncompressed.length: " + uncompressed.length);
+
+        compressed[0] = min;
+        // Combine both on 64 bits
+        compressed[1] = ((long) numberOfBitsToEncode) << 32;
+        compressed[1] |= uncompressed.length;
+
+        int bitOffset = 2 * 64; // 2 for the 2 entries above x 64 bits each,
+        for (long value : uncompressed) {
+            writeBits(compressed, value - min, bitOffset, numberOfBitsToEncode);
+            bitOffset += numberOfBitsToEncode;
+        }
+
+        return compressed;
+    }
+
+    public static long[] deltaValDecode(long[] compressed) {
+
+        long min = compressed[0];
+        int numberOfBitsToEncode = (int) (compressed[1] >>> 32);
+        int numberOfUncompressedLongs = (int) (compressed[1] & 0xFFFFFFFF);
+
+        if (debug)
+            System.out.println("numberOfUncompressedLongs: " + numberOfUncompressedLongs);
+
+        long[] uncompressed = new long[numberOfUncompressedLongs]; // Keep only the low 32 bits
+
+        if (debug)
+            System.out.println("Min: " + min + " numberOfBitsToEncode: " + numberOfBitsToEncode + " uncompressed.length: " + uncompressed.length);
+
+        int offsetBitsCompressed = 2 * 64; // Skip the first 2 entries above x 64 bits each
+        for (int i = 0; i < uncompressed.length; i++) {
+            uncompressed[i] = min + readBits(compressed, offsetBitsCompressed, numberOfBitsToEncode);
+            offsetBitsCompressed += numberOfBitsToEncode;
+        }
+
+        return uncompressed;
+    }
+
+    public static int[] deltaValEncode(int[] uncompressed) {
+        int min = Integer.MAX_VALUE;
+        int max = Integer.MIN_VALUE;
+
+        // Find the min and max in the set to figure out the range
+        for (int v : uncompressed) {
+            max = v > max ? v : max;
+            min = v < min ? v : min;
+        }
+
+        // Determine the number of bits needed to encode the delta from the minimum
+        int range = max - min;
+        int numberOfBitsToEncode = 32 - Integer.numberOfLeadingZeros(range);
+
+        if (debug)
+            System.out.println("Min: " + min + " Max: " + max + " Range: " + range + " Number of bits to encode: " + numberOfBitsToEncode);
+
+        // Create the resulting aray
+        // + 1 for the first entry that stores the minimum value
+        // + 1 for the number of bits used to encode each delta
+        // + 1 for the number of integers when decompressing
+        int numberOfCompressedInts = 1 + (numberOfBitsToEncode * uncompressed.length) / 32;
+        int[] compressed = new int[1 + 1 + 1 + numberOfCompressedInts];
+
+        if (debug)
+            System.out.println("numberOfCompressedInts: " + numberOfCompressedInts + " uncompressed.length: " + uncompressed.length);
+
+        compressed[0] = min;
+        compressed[1] = numberOfBitsToEncode;
+        compressed[2] = uncompressed.length;
+
+        int bitOffset = 3 * 32; // 3 for the 3 entries above x 32 bits each,
+        for (int value : uncompressed) {
+            writeBits(compressed, value - min, bitOffset, numberOfBitsToEncode, false);
+            bitOffset += numberOfBitsToEncode;
+        }
+
+        return compressed;
+    }
+
+    public static int[] deltaValDecode(int[] compressed) {
+
+        int min = compressed[0];
+        int numberOfBitsToEncode = compressed[1];
+        int[] uncompressed = new int[compressed[2]];
+
+        if (debug)
+            System.out.println("Min: " + min + " numberOfBitsToEncode: " + numberOfBitsToEncode + " uncompressed.length: " + uncompressed.length);
+
+        int offsetBitsCompressed = 3 * 32; // Skip the first 3 entries above x 32 bits each
+        for (int i = 0; i < uncompressed.length; i++) {
+            uncompressed[i] = min + readBits(compressed, offsetBitsCompressed, numberOfBitsToEncode);
+            offsetBitsCompressed += numberOfBitsToEncode;
+        }
+
+        return uncompressed;
+    }
+
     /**
      * Write a certain number of bits of an integer into an integer array
      * starting from the given start offset
-     * 
-     * @param out
-     *                the output array
-     * @param val
-     *                the integer to be written
-     * @param outOffset
-     *                the start offset in bits in the output array
-     * @param bits
-     *                the number of bits to be written (bits greater or equal to 0)
+     *
+     * @param out       the output array
+     * @param val       the integer to be written
+     * @param outOffset the start offset in bits in the output array
+     * @param bits      the number of bits to be written (bits greater or equal to 0)
      */
-	public static final void writeBits(int[] out, int val, int outOffset, int bits, boolean printInfo) {
-		if (bits == 0)
-			return;
-		
-		final int index = outOffset >>> 5; // Divide by 32 (=2^5)
-		final int skip = outOffset & 0b11111; // Modulo 32
+    public static final void writeBits(int[] out, int val, int outOffset, int bits, boolean printInfo) {
+        if (bits == 0)
+            return;
 
-		if (printInfo) {
-			System.out.println();
-			System.out.println("outOffset: " + outOffset + " index: " + index + " skip: " + skip + " bits: " + bits);
-			System.out.println("             00000000011111111112222222222333");
-			System.out.println("             12345678901234567890123456789012");
-			System.out.println("             -------|-------|-------|--------");
-		}
+        final int index = outOffset >>> 5; // Divide by 32 (=2^5)
+        final int skip = outOffset & 0b11111; // Modulo 32
 
-		val &= (0xFFFFFFFF >>> (32 - bits));
-		if (printInfo) {
-			System.out.println("val:         " + "00000000000000000000000000000000".substring(Integer.toBinaryString(val).length()) + Integer.toBinaryString(val));
-			System.out.println("out[index]:  " + "00000000000000000000000000000000".substring(Integer.toBinaryString(out[index]).length()) + Integer.toBinaryString(out[index]));
-		}
-		out[index] |= (val << skip);
-		if (printInfo) {
-			System.out.println("out[index]:  " + "00000000000000000000000000000000".substring(Integer.toBinaryString(out[index]).length()) + Integer.toBinaryString(out[index]));
-		}
-		if (32 - skip < bits) {
-			out[index + 1] |= (val >>> (32 - skip));
-			if (printInfo) {
-				System.out.println(
-					"out[index+1]:" + "00000000000000000000000000000000".substring(Integer.toBinaryString(out[index + 1]).length()) + Integer.toBinaryString(out[index + 1]));
-			}
-		}
-	}
+        if (printInfo) {
+            System.out.println();
+            System.out.println("outOffset: " + outOffset + " index: " + index + " skip: " + skip + " bits: " + bits);
+            System.out.println("             00000000011111111112222222222333");
+            System.out.println("             12345678901234567890123456789012");
+            System.out.println("             -------|-------|-------|--------");
+        }
 
-	public static final void newwriteBits(int[] out, int bits, int outOffset, int bitsToImport) {
-		if (bitsToImport == 0)
-			return;
+        val &= (0xFFFFFFFF >>> (32 - bits));
+        if (printInfo) {
+            System.out.println("val:         " + "00000000000000000000000000000000".substring(Integer.toBinaryString(val).length()) + Integer.toBinaryString(val));
+            System.out.println("out[index]:  " + "00000000000000000000000000000000".substring(Integer.toBinaryString(out[index]).length()) + Integer.toBinaryString(out[index]));
+        }
+        out[index] |= (val << skip);
+        if (printInfo) {
+            System.out.println("out[index]:  " + "00000000000000000000000000000000".substring(Integer.toBinaryString(out[index]).length()) + Integer.toBinaryString(out[index]));
+        }
+        if (32 - skip < bits) {
+            out[index + 1] |= (val >>> (32 - skip));
+            if (printInfo) {
+                System.out.println(
+                        "out[index+1]:" + "00000000000000000000000000000000".substring(Integer.toBinaryString(out[index + 1]).length()) + Integer.toBinaryString(out[index + 1]));
+            }
+        }
+    }
+
+    public static final void newwriteBits(int[] out, int bits, int outOffset, int bitsToImport) {
+        if (bitsToImport == 0)
+            return;
 
 		/*
 		 * Divide by 32 to get the index of element [i] bit shifting 5 bits to
 		 * the right, pumping 0 in. 32 = 2^5
 		 */
-		final int index = outOffset >>> 5;
-		final int spaceLeft = 32 - (outOffset & 0b11111); // Modulo 32 (=2^5)
+        final int index = outOffset >>> 5;
+        final int spaceLeft = 32 - (outOffset & 0b11111); // Modulo 32 (=2^5)
 
 		/*
 		 * The objective is to pack a given number of bits at some position in
@@ -649,7 +657,7 @@ public class Compression {
 		 * bits that we can then store in element [i] and [i + 1].
 		 * 
 		 * We also want to be somewhat efficient by doing bit manipulations that
-		 * dont need to use loops (as in loop over the bits and copy them one by
+		 * don't need to use loops (as in loop over the bits and copy them one by
 		 * one) or if/then/else constructs since they would then rely on branch
 		 * prediction in the CPU.
 		 * 
@@ -674,7 +682,7 @@ public class Compression {
 		 * bitsToImport It is used to mask the operation that is irrelevant when
 		 * we do a logical "or"
 		 */
-		int maskSign = ((spaceLeft - bitsToImport) >> 31);
+        int maskSign = ((spaceLeft - bitsToImport) >> 31);
 
 		/*
 		 * Use when spaceLeft >= bitsToImport maskLeft will have (32 -
@@ -685,20 +693,20 @@ public class Compression {
 		 * Note the triple chevron (>>>) that is used to pump 0 from the bit
 		 * sign when shifting to the right.
 		 */
-		int maskLeft = 0xFFFFFFFF >>> (32 - spaceLeft);
+        int maskLeft = 0xFFFFFFFF >>> (32 - spaceLeft);
 
 		/*
 		 * Compute the number of bits to rotate left or right, depending on the
 		 * space left and the number of bits to load. The maskSign variable will
 		 * zero out one of them every time.
 		 */
-		int rotateRightGTE = (bitsToImport - spaceLeft) & maskSign;
-		int rotateLeftLTZ  = (spaceLeft - bitsToImport) & ~maskSign;
+        int rotateRightGTE = (bitsToImport - spaceLeft) & maskSign;
+        int rotateLeftLTZ = (spaceLeft - bitsToImport) & ~maskSign;
 
-		System.out.println();
-		System.out.println("bitsToImport:   " + bitsToImport + " spaceLeft: " + spaceLeft);
-		System.out.println("rotateRightGTE: " + rotateRightGTE);
-		System.out.println("rotateLeftLTZ:  " + rotateLeftLTZ);
+        System.out.println();
+        System.out.println("bitsToImport:   " + bitsToImport + " spaceLeft: " + spaceLeft);
+        System.out.println("rotateRightGTE: " + rotateRightGTE);
+        System.out.println("rotateLeftLTZ:  " + rotateLeftLTZ);
 
 		/*
 		 * bitsLeft contains the first part of the bits that will be stored in
@@ -708,7 +716,7 @@ public class Compression {
 		 * 32 bits set to 0) and we finally mask the result with maskLeft to set
 		 * to 0 the bits that are not to be touched in element [i].
 		 */
-		int bitsLeft = (((bits >> rotateRightGTE) & maskSign) | ((bits << rotateLeftLTZ) & ~maskSign)) & maskLeft;
+        int bitsLeft = (((bits >> rotateRightGTE) & maskSign) | ((bits << rotateLeftLTZ) & ~maskSign)) & maskLeft;
 
 		/*
 		 * bitsRight contains the second part (if there is not enough space left
@@ -727,268 +735,205 @@ public class Compression {
 		 * as not to pollute element [i + 1] which would then show up when we do
 		 * a logical "or" at the next call.
 		 */
-		int bitsRight = (bits << (spaceLeft - bitsToImport)) & maskSign;
+        int bitsRight = (bits << (spaceLeft - bitsToImport)) & maskSign;
 
-		out[index]     |= bitsLeft;
-		out[index + 1] |= bitsRight;
-	}
+        out[index] |= bitsLeft;
+        out[index + 1] |= bitsRight;
+    }
 
     /**
      * Read a certain number of bits of an integer into an integer array
      * starting from the given start offset
-     * 
-     * @param in
-     *                the input array
-     * @param inOffset
-     *                the start offset in bits in the input array
-     * @param bits
-     *                the number of bits to be read, unlike writeBits(),
-     *                readBits() does not deal with bits == 0 and thus bits
-     *                must be greater than 0. When bits == 0, the calling functions will
-     *                just skip the entire bits-bit slots without decoding them
+     *
+     * @param in       the input array
+     * @param inOffset the start offset in bits in the input array
+     * @param bits     the number of bits to be read, unlike writeBits(),
+     *                 readBits() does not deal with bits == 0 and thus bits
+     *                 must be greater than 0. When bits == 0, the calling functions will
+     *                 just skip the entire bits-bit slots without decoding them
      * @return the bits bits of the input
      */
     public static final int readBits(int[] in, final int inOffset, final int bits) {
-            final int index = inOffset >>> 5;     // Divide by 32 (2^5)
-            final int skip  = inOffset & 0b11111; // Keep the last 5 bits
-            int val = in[index] >>> skip;
-            if (32 - skip < bits) {
-                    val |= (in[index + 1] << (32 - skip));
-            }
-            return val & (0xFFFFFFFF >>> (32 - bits));
+        final int index = inOffset >>> 5;     // Divide by 32 (2^5)
+        final int skip = inOffset & 0b11111; // Keep the last 5 bits
+        int val = in[index] >>> skip;
+        if (32 - skip < bits) {
+            val |= (in[index + 1] << (32 - skip));
+        }
+        return val & (0xFFFFFFFF >>> (32 - bits));
     }
 
     /**
      * Write a certain number of bits of a long into a long array
      * starting from the given start offset
-     * 
-     * @param out
-     *                the output array
-     * @param val
-     *                the integer to be written
-     * @param outOffset
-     *                the start offset in bits in the output array
-     * @param bits
-     *                the number of bits to be written (bits greater or equal to 0)
+     *
+     * @param out          the output array
+     * @param val          the integer to be written
+     * @param outOffset    the start offset in bits in the output array
+     * @param numberOfBits the number of bits to be written (bits greater or equal to 0)
      */
-    public static final void writeBits(long[] out, long val, int outOffset, int numberOfbits) {
-            if (numberOfbits == 0)
-                    return;
+    public static final void writeBits(long[] out, long val, int outOffset, int numberOfBits) {
+        if (numberOfBits == 0)
+            return;
 
-            final int index = outOffset >>> 6;      // divide by 64 (=2^6)
-            final int skip  = outOffset & 0b111111; // Modulo 64  
-            val &= (0xFFFFFFFFFFFFFFFFL >>> (64 - numberOfbits));
-            out[index] |= (val << skip);
-            if (64 - skip < numberOfbits)
-                    out[index + 1] |= (val >>> (64 - skip));
+        final int index = outOffset >>> 6;      // divide by 64 (=2^6)
+        final int skip = outOffset & 0b111111; // Modulo 64
+        val &= (0xFFFFFFFFFFFFFFFFL >>> (64 - numberOfBits));
+        out[index] |= (val << skip);
+        if (64 - skip < numberOfBits)
+            out[index + 1] |= (val >>> (64 - skip));
     }
 
     /**
      * Read a certain number of bits of a long into a long array
      * starting from the given start offset
-     * 
-     * @param in
-     *                the input array
-     * @param inOffset
-     *                the start offset in bits in the input array
-     * @param bits
-     *                the number of bits to be read, unlike writeBits(),
-     *                readBits() does not deal with bits == 0 and thus bits
-     *                must be greater than 0. When bits == 0, the calling functions will
-     *                just skip the entire bits-bit slots without decoding them
+     *
+     * @param in           the input array
+     * @param inOffset     the start offset in bits in the input array
+     * @param numberOfBits the number of bits to be read, unlike writeBits(),
+     *                     readBits() does not deal with bits == 0 and thus bits
+     *                     must be greater than 0. When bits == 0, the calling functions will
+     *                     just skip the entire bits-bit slots without decoding them
      * @return the bits bits of the input
      */
     public static final long readBits(long[] in, final int inOffset, final int numberOfBits) {
-            final int index = inOffset >>> 6;      // Divide by 64 (=2^6)
-            final int skip  = inOffset & 0b111111; // Modulo 64
-            long val = in[index] >>> skip;
-            if (64 - skip < numberOfBits) {
-                    val |= (in[index + 1] << (64 - skip));
-            }
-            return val & (0xFFFFFFFFFFFFFFFFL >>> (64 - numberOfBits));
+        final int index = inOffset >>> 6;      // Divide by 64 (=2^6)
+        final int skip = inOffset & 0b111111; // Modulo 64
+        long val = in[index] >>> skip;
+        if (64 - skip < numberOfBits) {
+            val |= (in[index + 1] << (64 - skip));
+        }
+        return val & (0xFFFFFFFFFFFFFFFFL >>> (64 - numberOfBits));
     }
 
-	public static byte[] rleEncode(byte[] uncompressed) {
-		int size = uncompressed.length;
-		ByteBuffer bb = ByteBuffer.allocate(2 * size);
-		bb.putInt(size);
-		int zeros = 0;
-		for (int i = 0; i < size; i++) {
-			if (uncompressed[i] == 0) {
-				if (++zeros == 255) {
-					bb.putShort((short) zeros);
-					zeros = 0;
-				}
-			} else {
-				if (zeros > 0) {
-					bb.putShort((short) zeros);
-					zeros = 0;
-				}
-				bb.put(uncompressed[i]);
-			}
-		}
-		if (zeros > 0) {
-			bb.putShort((short) zeros);
-			zeros = 0;
-		}
-		size = bb.position();
-		byte[] buf = new byte[size];
-		bb.rewind();
-		bb.get(buf, 0, size).array();
-		return buf;
-	}
+    public static byte[] rleEncode(byte[] uncompressed) {
+        int size = uncompressed.length;
+        ByteBuffer bb = ByteBuffer.allocate(2 * size);
+        bb.putInt(size);
+        int zeros = 0;
+        for (int i = 0; i < size; i++) {
+            if (uncompressed[i] == 0) {
+                if (++zeros == 255) {
+                    bb.putShort((short) zeros);
+                    zeros = 0;
+                }
+            } else {
+                if (zeros > 0) {
+                    bb.putShort((short) zeros);
+                    zeros = 0;
+                }
+                bb.put(uncompressed[i]);
+            }
+        }
+        if (zeros > 0) {
+            bb.putShort((short) zeros);
+            zeros = 0;
+        }
+        size = bb.position();
+        byte[] buf = new byte[size];
+        bb.rewind();
+        bb.get(buf, 0, size).array();
+        return buf;
+    }
 
-	public static byte[] rleDecode(byte[] compressed) {
-		ByteBuffer bb = ByteBuffer.wrap(compressed);
-		byte[] uncompressed = new byte[bb.getInt()];
-		int pos = 0;
-		while (bb.position() < bb.capacity()) {
-			byte value = bb.get();
-			if (value == 0) {
-				bb.position(bb.position() - 1);
-				pos += bb.getShort();
-			} else {
-				uncompressed[pos++] = value;
-			}
-		}
-		return uncompressed;
-	}
+    public static byte[] rleDecode(byte[] compressed) {
+        ByteBuffer bb = ByteBuffer.wrap(compressed);
+        byte[] uncompressed = new byte[bb.getInt()];
+        int pos = 0;
+        while (bb.position() < bb.capacity()) {
+            byte value = bb.get();
+            if (value == 0) {
+                bb.position(bb.position() - 1);
+                pos += bb.getShort();
+            } else {
+                uncompressed[pos++] = value;
+            }
+        }
+        return uncompressed;
+    }
 
-	public static int[] transpose32b(int[] input) {
-		if (input.length != 32) // Not a square matrix...
-			return null;
-		
-		int j, k;
-		int m, t; // Should be unsigned
+    public static int[] transpose32b(int[] input) {
+        if (input.length != 32) // Not a square matrix...
+            return null;
 
-		m = 0x0000FFFF;
-		for (j = 16; j != 0; j = j >>> 1, m = m ^ (m << j)) {
-			for (k = 0; k < 32; k = (k + j + 1) & ~j) {
-				t = (input[k] ^ (input[k + j] >>> j)) & m;
-				input[k]     = input[k]     ^ t;
-				input[k + j] = input[k + j] ^ (t << j);
-			}
-		}
+        int j, k;
+        int m, t; // Should be unsigned
 
-		return input;
-	}
-	
-	/**
-	 * @param currentInt
-	 */
-	private static void binaryPrint(String information, int integer) {
-		System.out.println(information + "00000000000000000000000000000000".substring(Integer.toBinaryString(integer).length()) + Integer.toBinaryString(integer));
-	}
+        m = 0x0000FFFF;
+        for (j = 16; j != 0; j = j >>> 1, m = m ^ (m << j)) {
+            for (k = 0; k < 32; k = (k + j + 1) & ~j) {
+                t = (input[k] ^ (input[k + j] >>> j)) & m;
+                input[k] = input[k] ^ t;
+                input[k + j] = input[k + j] ^ (t << j);
+            }
+        }
 
-	public static void testDeltaValWithIntegers() {
-		int[] test = new int[64];
-		for (int i = 0 ; i < test.length; i++)
-			test[i] += 10 * 1023 * Math.random();
-		
-		int[]   compressed = deltaValEncode(test);
-		int[] uncompressed = deltaValDecode(compressed);
-		
-		for (int i = 0; i < test.length; i++)
-			System.out.print((i == 0 ? "" : ", ") + test[i]);
-		System.out.println();
-		
-		System.out.println("Uncompressed:");
-		for (int i = 0; i < uncompressed.length; i++)
-			System.out.print((i == 0 ? "" : ", ") + uncompressed[i]);
-		System.out.println();
-		
-		System.out.println("uncompressed.length: " + uncompressed.length + " compressed.length:" + compressed.length);
-	}
-	
-	public static void testDeltaValWithLongs() {
-		long[] test = new long[64];
-		for (int i = 0 ; i < test.length; i++)
-//			test[i] += (2L << 33)+ i; // 2^33 to get out of range of Integers on 32 bits
-			test[i] += 10L * 1000L * Math.random();
+        return input;
+    }
 
-		long[]   compressed = deltaValEncode(test);
-		long[] uncompressed = deltaValDecode(compressed);
-		
-		for (int i = 0; i < test.length; i++)
-			System.out.print((i == 0 ? "" : ", ") + test[i]);
-		System.out.println();
-		
-		System.out.println("Uncompressed:");
-		for (int i = 0; i < uncompressed.length; i++)
-			System.out.print((i == 0 ? "" : ", ") + uncompressed[i]);
-		System.out.println();
-		
-		System.out.println("uncompressed.length: " + uncompressed.length + " compressed.length:" + compressed.length);
-	}
-	
-	public static void testDeltaXorWithFloats() throws Exception {
-		float[] test = new float[65536];
-		// Test when all the values are positive
-		test[0] = 1.1f;
-		for (int i = 1 ; i < test.length; i++)
-			test[i] = test[i - 1] + (float)Math.random();
-		
-		CompressedFloatArray comp = deltaXorEncode(test);
-		float[] result = deltaXorDecode(comp);
-		
-		Debug.compareFloatBuffers(test, result, "testDeltaXorWithFloats:");
-	}
-	
-	public static void testTranspose32b() {
-		   final int[] testMatrix = {            // Test matrix.
-				      0x01020304, 0x05060708, 0x090A0B0C, 0x0D0E0F00,
-				      0xF0E0D0C0, 0xB0A09080, 0x70605040, 0x30201000,
-				      0x00000000, 0x01010101, 0x02020202, 0x04040404,
-				      0x08080808, 0x10101010, 0x20202020, 0x40404040,
+    /**
+     * @param information String to print out at the beginning
+     * @param integer     Integer whose binary representation is to be added
+     */
+    private static void binaryPrint(String information, int integer) {
+        System.out.println(information + "00000000000000000000000000000000".substring(Integer.toBinaryString(integer).length()) + Integer.toBinaryString(integer));
+    }
 
-				      0x80808080, 0xFFFFFFFF, 0xFEFEFEFE, 0xFDFDFDFD,
-				      0xFBFBFBFB, 0xF7F7F7F7, 0xEFEFEFEF, 0xDFDFDFDF,
-				      0xBFBFBFBF, 0x7F7F7F7F, 0x80000001, 0xC0000003,
-				      0xE0000007, 0xF000000F, 0xF800001F, 0xFC00003F};
+    public static void testTranspose32b() {
+        final int[] testMatrix = {            // Test matrix.
+                0x01020304, 0x05060708, 0x090A0B0C, 0x0D0E0F00,
+                0xF0E0D0C0, 0xB0A09080, 0x70605040, 0x30201000,
+                0x00000000, 0x01010101, 0x02020202, 0x04040404,
+                0x08080808, 0x10101010, 0x20202020, 0x40404040,
 
-		   final int[] testMatrixTranspose = {            // transpose.
-				      0x0C00FFBF, 0x0A017F5F, 0x0F027ECF, 0x0F047DC7,
-				      0x30087BC3, 0x501077C1, 0x00206FC0, 0xF0405FC0,
-				      0x0C00FF80, 0x0A017F40, 0x0F027EC0, 0x00047DC0,
-				      0x30087BC0, 0x501077C0, 0xF0206FC0, 0x00405FC0,
+                0x80808080, 0xFFFFFFFF, 0xFEFEFEFE, 0xFDFDFDFD,
+                0xFBFBFBFB, 0xF7F7F7F7, 0xEFEFEFEF, 0xDFDFDFDF,
+                0xBFBFBFBF, 0x7F7F7F7F, 0x80000001, 0xC0000003,
+                0xE0000007, 0xF000000F, 0xF800001F, 0xFC00003F};
 
-				      0x0C00FF80, 0x0A017F40, 0x00027EC0, 0x0F047DC0,
-				      0x30087BC0, 0x501077C0, 0xF0206FC0, 0xF0405FC0,
-				      0x0C00FF80, 0x0A017F40, 0x00027EC1, 0x00047DC3,
-				      0x60087BC7, 0xA01077CF, 0x00206FDF, 0x00405FFF};
+        final int[] testMatrixTranspose = {            // transpose.
+                0x0C00FFBF, 0x0A017F5F, 0x0F027ECF, 0x0F047DC7,
+                0x30087BC3, 0x501077C1, 0x00206FC0, 0xF0405FC0,
+                0x0C00FF80, 0x0A017F40, 0x0F027EC0, 0x00047DC0,
+                0x30087BC0, 0x501077C0, 0xF0206FC0, 0x00405FC0,
 
-		   System.out.println("transpose32b, forward test:");
-		   
-		   boolean ok = true;
-		   int[] resultForward = transpose32b(testMatrix);
-		   for (int i = 0; i < 32; i++)
-		      if (resultForward[i] != testMatrixTranspose[i]) {
-		    	  System.out.println("Error: entry[" + i + "] should be " + testMatrixTranspose[i] + " found: " + resultForward[i]);
-		    	  ok = false;
-		      }
-		   
-		   if (ok)
-			   System.out.println("Passed");
-		   
-		   System.out.println("transpose32b, reverse test:");
-		   ok = true;
-		   int[] resultBackward = transpose32b(resultForward);
-		   for (int i = 0; i < 32; i++)
-		      if (resultBackward[i] != testMatrix[i]) {
-		    	  System.out.println("Error backward: entry[" + i + "] should be " + testMatrix[i] + " found: " + resultBackward[i]);
-		    	  ok = false;
-		      }
+                0x0C00FF80, 0x0A017F40, 0x00027EC0, 0x0F047DC0,
+                0x30087BC0, 0x501077C0, 0xF0206FC0, 0xF0405FC0,
+                0x0C00FF80, 0x0A017F40, 0x00027EC1, 0x00047DC3,
+                0x60087BC7, 0xA01077CF, 0x00206FDF, 0x00405FFF};
 
-		   if (ok)
-			   System.out.println("Passed");
-		   
-	}
+        System.out.println("transpose32b, forward test:");
 
-	public static void testBitStorage() {
-		int bits = 0b10000001111100001111000111001101;
-		int spaceLeft    = 18;
-		
-		for (int bitsToImport = 7; bitsToImport <= 32; bitsToImport += 5) {
+        boolean ok = true;
+        int[] resultForward = transpose32b(testMatrix);
+        for (int i = 0; i < 32; i++)
+            if (resultForward[i] != testMatrixTranspose[i]) {
+                System.out.println("Error: entry[" + i + "] should be " + testMatrixTranspose[i] + " found: " + resultForward[i]);
+                ok = false;
+            }
+
+        if (ok)
+            System.out.println("Passed");
+
+        System.out.println("transpose32b, reverse test:");
+        ok = true;
+        int[] resultBackward = transpose32b(resultForward);
+        for (int i = 0; i < 32; i++)
+            if (resultBackward[i] != testMatrix[i]) {
+                System.out.println("Error backward: entry[" + i + "] should be " + testMatrix[i] + " found: " + resultBackward[i]);
+                ok = false;
+            }
+
+        if (ok)
+            System.out.println("Passed");
+
+    }
+
+    public static void testBitStorage() {
+        int bits = 0b10000001111100001111000111001101;
+        int spaceLeft = 18;
+
+        for (int bitsToImport = 7; bitsToImport <= 32; bitsToImport += 5) {
 			/*
 			 * The objective is to pack a given number of bits at some position in an array.
 			 * Since there may not be enough room in element [i] we have to store some of the bits
@@ -1018,7 +963,7 @@ public class Compression {
 			 * maskSign is all 0's or all 1's depending on the sign of spaceLeft - bitsToImport
 			 * It is used to mask the operation that is irrelevant when we do a logical "or"
 			 */
-			int maskSign = ((spaceLeft - bitsToImport) >> 31);
+            int maskSign = ((spaceLeft - bitsToImport) >> 31);
 
 			/*
 			 *  Use when spaceLeft >= bitsToImport
@@ -1029,20 +974,20 @@ public class Compression {
 			 *  Note the triple chevron (>>>) that is used to pump 0 from the bit sign when shifting
 			 *  to the right.
 			 */
-			int maskLeft = 0xFFFFFFFF >>> (32 - spaceLeft);
+            int maskLeft = 0xFFFFFFFF >>> (32 - spaceLeft);
 			
 			/*
 			 * Compute the number of bits to rotate left or right, depending on the space left
 			 * and the number of bits to load.
 			 * The maskSign variable will zero out one of them every time.
 			 */
-			int rotateRightGTE = (bitsToImport - spaceLeft) & maskSign;
-			int rotateLeftLTZ  = (spaceLeft - bitsToImport) & ~maskSign;
+            int rotateRightGTE = (bitsToImport - spaceLeft) & maskSign;
+            int rotateLeftLTZ = (spaceLeft - bitsToImport) & ~maskSign;
 
-			System.out.println();
-			System.out.println("bitsToImport:   " + bitsToImport + " spaceLeft: " + spaceLeft);
-			System.out.println("rotateRightGTE: " + rotateRightGTE);
-			System.out.println("rotateLeftLTZ:  " + rotateLeftLTZ);
+            System.out.println();
+            System.out.println("bitsToImport:   " + bitsToImport + " spaceLeft: " + spaceLeft);
+            System.out.println("rotateRightGTE: " + rotateRightGTE);
+            System.out.println("rotateLeftLTZ:  " + rotateLeftLTZ);
 
 			/*
 			 * bitsLeft contains the first part of the bits that will be stored in element [i]
@@ -1052,7 +997,7 @@ public class Compression {
 			 * and we finally mask the result with maskLeft to set to 0 the bits that are not to be 
 			 * touched in element [i].
 			 */
-			int bitsLeft = (((bits >> rotateRightGTE) & maskSign) | ((bits << rotateLeftLTZ) & ~maskSign)) & maskLeft;
+            int bitsLeft = (((bits >> rotateRightGTE) & maskSign) | ((bits << rotateLeftLTZ) & ~maskSign)) & maskLeft;
 
 			/*
 			 * bitsRight contains the second part (if there is not enough space left in element [i]) of the bits we
@@ -1068,28 +1013,22 @@ public class Compression {
 			 * in bitsRight to be set to 0 so as not to pollute element [i + 1] which would then show up when we do a logical
 			 * "or" at the next call.
 			 */
-			int bitsRight = (bits << (spaceLeft - bitsToImport)) & maskSign;
+            int bitsRight = (bits << (spaceLeft - bitsToImport)) & maskSign;
 
-			System.out.println("             00000000011111111112222222222333");
-			System.out.println("             12345678901234567890123456789012");
-			System.out.println("             -------|-------|-------|--------");
-			System.out.println("bits:        " + "00000000000000000000000000000000".substring(Integer.toBinaryString(bits).length()) + Integer.toBinaryString(bits));
-			System.out.println("bitsLeft:    " + "00000000000000000000000000000000".substring(Integer.toBinaryString(bitsLeft).length()) + Integer.toBinaryString(bitsLeft));
-			System.out.println("bitsRight:   " + "00000000000000000000000000000000".substring(Integer.toBinaryString(bitsRight).length()) + Integer.toBinaryString(bitsRight));
-		}
-	}
+            System.out.println("             00000000011111111112222222222333");
+            System.out.println("             12345678901234567890123456789012");
+            System.out.println("             -------|-------|-------|--------");
+            System.out.println("bits:        " + "00000000000000000000000000000000".substring(Integer.toBinaryString(bits).length()) + Integer.toBinaryString(bits));
+            System.out.println("bitsLeft:    " + "00000000000000000000000000000000".substring(Integer.toBinaryString(bitsLeft).length()) + Integer.toBinaryString(bitsLeft));
+            System.out.println("bitsRight:   " + "00000000000000000000000000000000".substring(Integer.toBinaryString(bitsRight).length()) + Integer.toBinaryString(bitsRight));
+        }
+    }
 
-	public static void main(String[] args) throws Exception {
+    public static void main(String[] args) throws Exception {
 
-		System.out.println("testDeltaValWithIntegers()");
-		testDeltaValWithIntegers();
-		System.out.println("\ntestDeltaValWithLongs()");
-		testDeltaValWithLongs();
-		System.out.println("\ntestDeltaXorWithFloats()");
-		testDeltaXorWithFloats();
-		System.out.println("\ntestTranspose32b()");
-		testTranspose32b();
-	
-		testBitStorage();
-	}
+        System.out.println("\ntestTranspose32b()");
+        testTranspose32b();
+
+        testBitStorage();
+    }
 }

@@ -14,17 +14,6 @@ public class BitManipulationHelper {
 		return ints;
 	}
 
-	public static byte[] integersToBytesloop(List<Integer> integers) {
-		byte[] bytes = new byte[integers.size() * TypeSize.INT32_BYTESIZE];
-		int offset = 0;
-		for (Integer integer : integers) {
-			for (int i = 1; i <= TypeSize.INT32_BYTESIZE; i++)
-				// x 8 because 8 bits per byte
-				bytes[offset++] = (byte) ((integer >> ((TypeSize.INT32_BYTESIZE - i) * 8)) & 0xff);
-		}
-		return bytes;
-	}
-
 	public static byte[] integersToBytes(List<Integer> integers) {
 		byte[] bytes = new byte[integers.size() * TypeSize.INT32_BYTESIZE];
 		int offset = 0;
@@ -37,47 +26,49 @@ public class BitManipulationHelper {
 		return bytes;
 	}
 
-	public static byte[] intsToBytes(int[] ints, int startFrom, int endAt) {
-			if (startFrom < 0 || startFrom > ints.length) {
-				System.err.println("Returning null! startFrom: " + startFrom + " ints.length: " + ints.length);
-				return null;
-			}
-			if (endAt < 0 || endAt > ints.length) {
-				System.err.println("Returning null! endAt: " + endAt + " ints.length: " + ints.length);
-				return null;
-			}
-			if (endAt < startFrom) {
-				System.err.println("Returning null! endAt: " + endAt + " startFrom: " + startFrom);
-				return null;
-			}
-	
-			int numberOfInts = endAt - startFrom;
-	
-			// x86 is little Endian
-			/*
-			0A.0B.0C.0D.
-			 |  |  |  |
-			 |  |  |  |-> a + 0: 0D
-			 |  |  |----> a + 1: 0C
-			 |  |-------> a + 2: 0B
-			 |----------> a + 3: 0A
-			*/
-	
-			byte[] bytes = new byte[numberOfInts * TypeSize.INT32_BYTESIZE];
-	
-			int offset = 0;
-			for (int idx = startFrom; idx < endAt; idx++) {
-				bytes[offset++] = (byte) ((ints[idx] >> 24) & 0xFF);
-				bytes[offset++] = (byte) ((ints[idx] >> 16) & 0xFF);
-				bytes[offset++] = (byte) ((ints[idx] >>  8) & 0xFF);
-				bytes[offset++] = (byte) ((ints[idx] >>  0) & 0xFF);
-			}		
-			return bytes;
-		}
+    public static byte[] intsToBytes(int[] ints, int startFrom, int endAt) {
+        if (startFrom < 0 || startFrom > ints.length) {
+            System.err.println("Returning null! startFrom: " + startFrom + " ints.length: " + ints.length);
+            return null;
+        }
+        if (endAt < 0 || endAt > ints.length) {
+            System.err.println("Returning null! endAt: " + endAt + " ints.length: " + ints.length);
+            return null;
+        }
+        if (endAt < startFrom) {
+            System.err.println("Returning null! endAt: " + endAt + " startFrom: " + startFrom);
+            return null;
+        }
+
+        int numberOfInts = endAt - startFrom;
+
+        /*
+            x86 is little Endian:
+
+            0A.0B.0C.0D.
+             |  |  |  |
+             |  |  |  |-> a + 0: 0D
+             |  |  |----> a + 1: 0C
+             |  |-------> a + 2: 0B
+             |----------> a + 3: 0A
+        */
+
+        byte[] bytes = new byte[numberOfInts * TypeSize.INT32_BYTESIZE];
+
+        int offset = 0;
+        for (int idx = startFrom; idx < endAt; idx++) {
+            bytes[offset++] = (byte) ((ints[idx] >> 24) & 0xFF);
+            bytes[offset++] = (byte) ((ints[idx] >> 16) & 0xFF);
+            bytes[offset++] = (byte) ((ints[idx] >> 8) & 0xFF);
+            bytes[offset++] = (byte) ((ints[idx] >> 0) & 0xFF);
+        }
+        return bytes;
+    }
 
 	public static int[] bytesToInts(byte[] bytes) {
 		if (bytes.length % TypeSize.INT32_BYTESIZE != 0) {
 			System.err.println("Wong number of bytes! It should be a multiple of " + TypeSize.INT32_BYTESIZE + ". Length: " + bytes.length);
+			return null;
 		}
 	
 		int[] ints = new int[bytes.length / TypeSize.INT32_BYTESIZE];
@@ -103,17 +94,6 @@ public class BitManipulationHelper {
 		return longs;
 	}
 
-	public static byte[] longsToBytesTest(List<Long> listOfLongs) {
-		byte[] bytes = new byte[listOfLongs.size() * TypeSize.INT64_BYTESIZE];
-		int offset = 0;
-		for (Long l : listOfLongs) {
-			for (int i = 1; i <= TypeSize.INT64_BYTESIZE; i++)
-				// x 8 because 8 bits per byte
-				bytes[offset++] = (byte) ((l >> ((TypeSize.INT64_BYTESIZE - i) * 8)) & 0xFF);
-		}
-		return bytes;
-	}
-
 	public static byte[] longsToBytes(List<Long> listOfLongs) {
 		byte[] bytes = new byte[listOfLongs.size() * TypeSize.INT64_BYTESIZE];
 		int offset = 0;
@@ -133,6 +113,7 @@ public class BitManipulationHelper {
 	public static long[] bytesToLongs(byte[] bytes) {
 		if (bytes.length % TypeSize.INT64_BYTESIZE != 0) {
 			System.err.println("Wong number of bytes! It should be a multiple of " + TypeSize.INT64_BYTESIZE + ". Length: " + bytes.length);
+			return null;
 		}
 	
 		long[] longs = new long[bytes.length / TypeSize.INT64_BYTESIZE];
@@ -179,21 +160,10 @@ public class BitManipulationHelper {
 		return bytes;
 	}
 
-	public static byte[] doublesToBytesLoop(List<Double> doubles) {
-		byte[] bytes = new byte[doubles.size() * TypeSize.DOUBLE_BYTESIZE];
-		int offset = 0;
-		for (Double doub : doubles) {
-			long lng = Double.doubleToLongBits(doub);
-			for (int i = 1; i <= TypeSize.DOUBLE_BYTESIZE; i++)
-				// x 8 because 8 bits per byte
-				bytes[offset++] = (byte) ((lng >> ((TypeSize.DOUBLE_BYTESIZE - i) * 8)) & 0xff);
-		}
-		return bytes;
-	}
-
 	public static double[] bytesToDoubles(byte[] bytes) {
 		if (bytes.length % TypeSize.DOUBLE_BYTESIZE != 0) {
 			System.err.println("Wong number of bytes! It should be a multiple of " + TypeSize.DOUBLE_BYTESIZE + ". Length: " + bytes.length);
+			return null;
 		}
 		double[] doubles = new double[bytes.length / TypeSize.DOUBLE_BYTESIZE];
 	
@@ -221,17 +191,6 @@ public class BitManipulationHelper {
 			shorts[i++] = s;
 		}
 		return shorts;
-	}
-
-	public static byte[] shortsToBytesTest(List<Short> shorts) {
-		byte[] bytes = new byte[shorts.size() * TypeSize.SHORT_BYTESIZE];
-		int offset = 0;
-		for (Short sh : shorts) {
-			for (int i = 1; i <= TypeSize.SHORT_BYTESIZE; i++)
-				// x 8 because 8 bits per byte
-				bytes[offset++] = (byte) ((sh >> ((TypeSize.SHORT_BYTESIZE - i) * 8)) & 0xff);
-		}
-		return bytes;
 	}
 
 	public static byte[] shortsToBytes(List<Short> shorts) {
@@ -270,17 +229,16 @@ public class BitManipulationHelper {
 		return floats;
 	}
 
-	public static byte[] floatsToBytesLoop(List<Float> floats) {
-		byte[] bytes = new byte[floats.size() * TypeSize.FLOAT_BYTESIZE];
-		int offset = 0;
-		for (Float f : floats) {
-			int in = Float.floatToIntBits(f);
-			for (int i = 1; i <= TypeSize.FLOAT_BYTESIZE; i++)
-				// x 8 because 8 bits per byte
-				bytes[offset++] = (byte) ((in >> ((TypeSize.FLOAT_BYTESIZE - i) * 8)) & 0xFF);
-		}
-		return bytes;
-	}
+    /*
+        x86 is little Endian:
+
+		0A.0B.0C.0D.
+		 |  |  |  |
+		 |  |  |  |-> a + 0: 0D
+		 |  |  |----> a + 1: 0C
+		 |  |-------> a + 2: 0B
+		 |----------> a + 3: 0A
+	*/
 
 	public static byte[] floatsToBytes(List<Float> floats) {
 		byte[] bytes = new byte[floats.size() * TypeSize.FLOAT_BYTESIZE];
@@ -295,7 +253,18 @@ public class BitManipulationHelper {
 		return bytes;
 	}
 
-	public static byte[] floatsToBytes(float[] floats, int startFrom, int endAt) {
+    /*
+        x86 is little Endian:
+
+		0A.0B.0C.0D.
+		 |  |  |  |
+		 |  |  |  |-> a + 0: 0D
+		 |  |  |----> a + 1: 0C
+		 |  |-------> a + 2: 0B
+		 |----------> a + 3: 0A
+	*/
+
+    public static byte[] floatsToBytes(float[] floats, int startFrom, int endAt) {
 		if (startFrom < 0 || startFrom > floats.length) {
 			System.err.println("Returning null! startFrom: " + startFrom + " floats.length: " + floats.length);
 			return null;
@@ -310,18 +279,6 @@ public class BitManipulationHelper {
 		}
 	
 		int numberOfFloats = endAt - startFrom;
-	
-		// x86 is little Endian
-		/*
-		 
-		0A.0B.0C.0D.
-		 |  |  |  |
-		 |  |  |  |-> a + 0: 0D
-		 |  |  |----> a + 1: 0C
-		 |  |-------> a + 2: 0B
-		 |----------> a + 3: 0A
-		*/
-	
 		byte[] bytes = new byte[numberOfFloats * TypeSize.FLOAT_BYTESIZE];
 		int offset = 0;
 		for (int idx = startFrom; idx < endAt; idx++) {
@@ -451,105 +408,23 @@ public class BitManipulationHelper {
 	public static int countSetBits(int n) {
 		int c; // c accumulates the total bits set in n
 		if (n < 0) {
-//			n &= 0b01111111111111111111111111111111;
-			n &= ((1 << 31) - 1);
+			n &= ((1 << 31) - 1); // 0b01111111111111111111111111111111
 		}
 		for (c = 0; n > 0; n = n & (n - 1))
 			c++;
 		return c;
 	}
 
+	// On macOS, the calculator provides bogus results when computing ((1 << 63) - 1)
 	// 64-bit version
 	public static int countSetBits(long n) {
 		int c; // c accumulates the total bits set in n
 		if (n < 0) {
-			n &= ((1 << 63) - 1);
+			n &= ((1 << 63) - 1); // 0b0111111111111111111111111111111111111111111111111111111111111111
+
 		}
 		for (c = 0; n > 0; n = n & (n - 1))
 			c++;
 		return c;
 	}
-
-	public static void testShorts() {
-		short[] shorts = {12345, 23456, 32765, -12345, -23456, -32765};
-		ArrayList<Short> listOfShorts = new ArrayList<Short>(shorts.length);
-		for (short s : shorts)
-			listOfShorts.add(s);
-		
-		System.out.println("Original shorts:");
-		Debug.dump(shorts);
-	
-		byte[] shortsToBytes = shortsToBytes(listOfShorts);
-		System.out.println("shortsToBytes:");
-		Debug.dump(shortsToBytes);
-		
-		short[] bytesToShorts = bytesToShorts(shortsToBytes);
-		System.out.println("bytesToShorts(shortsToBytes):");
-		Debug.dump(bytesToShorts);
-
-
-        byte[] shortsToBytesTest = shortsToBytesTest(listOfShorts);
-        System.out.println("shortsToBytesTest:");
-        Debug.dump(shortsToBytesTest);
-
-        short[] bytesToShortsTest = bytesToShorts(shortsToBytesTest);
-		System.out.println("bytesToShorts(shortsToBytesTest):");
-		Debug.dump(bytesToShortsTest);
-	
-	}
-
-	public static void testLongs() {
-		long[] longs = {123456987123456987L, 123456789123456789L, 234567890234567890L, -123456987123456987L, -123456789123456789L, -234567890234567890L};
-		ArrayList<Long> listOfLongs = new ArrayList<Long>(longs.length);
-		for (long l : longs)
-			listOfLongs.add(l);
-		
-		System.out.println("Original longs:");
-		Debug.dump(longs);
-	
-		byte[] longsToBytes = longsToBytes(listOfLongs);
-		System.out.println("longsToBytes:");
-		Debug.dump(longsToBytes);
-		
-		byte[] longsToBytesTest = longsToBytesTest(listOfLongs);
-		System.out.println("longsToBytesTest:");
-		Debug.dump(longsToBytesTest);
-		
-		long[] bytesToLongs = bytesToLongs(longsToBytes);
-		System.out.println("bytesToLongs(longsToBytes):");
-		Debug.dump(bytesToLongs);
-	
-		long[] bytesToLongsTest = bytesToLongs(longsToBytesTest);
-		System.out.println("bytesToLongs(longsToBytesTest):");
-		Debug.dump(bytesToLongsTest);
-	
-	}
-
-	public static void testBitCount32() {
-		int[] ints = {123456987, 123456789, 234567890, -123456987, -123456789, -234567890};
-		for (int i : ints)
-			System.out.println(i + " has " + countSetBits(i) + " bit(s) set");
-
-	}
-
-	public static void testBitCount64() {
-		long[] longs = {123456987L, 123456789L, 234567890L, -123456987L, -123456789L, -234567890L};
-		for (long i : longs)
-			System.out.println(i + " has " + countSetBits(i) + " bit(s) set");
-
-		long[] morelongs = {12341346136556987L, 1236361343456789L, 2345673653416346890L, -12345431625466987L, -123456736341689L, -23456341613467890L};
-		for (long i : morelongs)
-			System.out.println(i + " has " + countSetBits(i) + " bit(s) set");
-
-	}
-	public static void main(String[] args) {
-        testLongs();
-		System.out.println();
-		testShorts();
-		System.out.println();
-		testBitCount32();
-		System.out.println();
-		testBitCount64();
-	}
-
 }

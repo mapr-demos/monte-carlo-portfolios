@@ -11,13 +11,17 @@ import java.util.ArrayList;
 
 public class BitManipulationHelperTest {
 
-    static int numberOfFloats = 20;
-    static int numberOfDoubles = 20;
+    static int numberOfFloats   = 20;
+    static int numberOfDoubles  = 20;
     static int numberOfIntegers = 200;
+    static int numberOfLongs    = 200;
+    static int numberOfShorts   = 200;
 
-    static float magnitude = 10000.0f;
+    static float magnitude   = 10000.0f;
     static double magnitudeD = 10000.0d;
-    static float magnitudeI = 10000;
+    static float magnitudeI  = 10000;
+    static float magnitudeL  = 10000;
+    static float magnitudeS  = 10000;
 
     @Test
     public void testFloatsToBytes() throws Exception {
@@ -73,66 +77,12 @@ public class BitManipulationHelperTest {
     }
 
     @Test
-    public void testFloatsToBytesLoop() throws Exception {
-        ArrayList<Float> originalFloats = new ArrayList<>(numberOfFloats);
-        for (int i = 0; i < numberOfFloats; i++)
-            originalFloats.add((float) Math.random() * magnitude);
-
-        byte[] floatsToBytesLoop = BitManipulationHelper.floatsToBytesLoop(originalFloats);
-        float[] bytesToFloats = BitManipulationHelper.bytesToFloats(floatsToBytesLoop);
-
-        for (int i = 0; i < originalFloats.size(); i++) {
-            if (originalFloats.get(i) != bytesToFloats[i]) {
-                DebugGeneric<Float> d = new DebugGeneric<>();
-                System.out.println("Original floats:");
-                d.dump(originalFloats);
-
-                System.out.println("floatsToBytesLoop:");
-                Debug.dump(floatsToBytesLoop);
-
-                System.out.println("bytesToFloats:");
-                Debug.dump(bytesToFloats);
-
-                throw new RuntimeException("Values are different: originalFloats[" + i + "]=" + originalFloats.get(i) +
-                        " bytesToFloats[" + i + "]=" + bytesToFloats[i]);
-            }
-        }
-    }
-
-    @Test
     public void testDoublesToBytes() throws Exception {
         ArrayList<Double> originalDoubles = new ArrayList<>(numberOfDoubles);
         for (int i = 0; i < numberOfDoubles; i++)
             originalDoubles.add(Math.random() * magnitudeD);
 
         byte[] doublesToBytes = BitManipulationHelper.doublesToBytes(originalDoubles);
-        double[] bytesToDoubles = BitManipulationHelper.bytesToDoubles(doublesToBytes);
-
-        for (int i = 0; i < originalDoubles.size(); i++) {
-            if (originalDoubles.get(i) != bytesToDoubles[i]) {
-                DebugGeneric<Double> d = new DebugGeneric<>();
-                System.out.println("Original floats:");
-                d.dump(originalDoubles);
-
-                System.out.println("doublesToBytes:");
-                Debug.dump(doublesToBytes);
-
-                System.out.println("bytesToDoubles:");
-                Debug.dump(bytesToDoubles);
-
-                throw new RuntimeException("Values are different: originalDoubles[" + i + "]=" + originalDoubles.get(i) +
-                        " bytesToDoubles[" + i + "]=" + bytesToDoubles[i]);
-            }
-        }
-    }
-
-    @Test
-    public void testDoublesToBytesLoop() throws Exception {
-        ArrayList<Double> originalDoubles = new ArrayList<>(numberOfDoubles);
-        for (int i = 0; i < numberOfDoubles; i++)
-            originalDoubles.add(Math.random() * magnitudeD);
-
-        byte[] doublesToBytes = BitManipulationHelper.doublesToBytesLoop(originalDoubles);
         double[] bytesToDoubles = BitManipulationHelper.bytesToDoubles(doublesToBytes);
 
         for (int i = 0; i < originalDoubles.size(); i++) {
@@ -182,7 +132,7 @@ public class BitManipulationHelperTest {
     @Test
     public void testIntegersToBytes() throws Exception {
         ArrayList<Integer> originalIntegers = new ArrayList<Integer>(numberOfIntegers);
-        for (int i = 0; i < numberOfDoubles; i++)
+        for (int i = 0; i < numberOfIntegers; i++)
             originalIntegers.add((int) (Math.random() * magnitudeI));
 
         byte[] integersToBytes = BitManipulationHelper.integersToBytes(originalIntegers);
@@ -197,39 +147,67 @@ public class BitManipulationHelperTest {
                 System.out.println("integersToBytes:");
                 Debug.dump(integersToBytes);
 
-                System.out.println("bytesToInts(integersToBytes):");
+                System.out.println("bytesToInts:");
                 Debug.dump(bytesToIntegers);
 
                 throw new RuntimeException("Values are different: originalIntegers[" + i + "]=" + originalIntegers.get(i) +
-                        " bytesToDoubles[" + i + "]=" + bytesToIntegers[i]);
+                        " bytesToIntegers[" + i + "]=" + bytesToIntegers[i]);
             }
         }
     }
 
     @Test
-    public void testIntegersToBytesLoop() throws Exception {
-        ArrayList<Integer> originalIntegers = new ArrayList<Integer>(numberOfIntegers);
-        for (int i = 0; i < numberOfDoubles; i++)
-            originalIntegers.add((int) (Math.random() * magnitudeI));
+    public void testLongsToBytes() throws Exception {
+        ArrayList<Long> originalLongs = new ArrayList<Long>(numberOfLongs);
+        for (int i = 0; i < numberOfLongs; i++)
+            originalLongs.add((long) (Math.random() * magnitudeL));
 
-        byte[] integersToBytes = BitManipulationHelper.integersToBytesloop(originalIntegers);
-        int[] bytesToIntegers = BitManipulationHelper.bytesToInts(integersToBytes);
+        byte[] longsToBytes = BitManipulationHelper.longsToBytes(originalLongs);
+        long[] bytesToLongs = BitManipulationHelper.bytesToLongs(longsToBytes);
 
-        for (int i = 0; i < originalIntegers.size(); i++) {
-            if (originalIntegers.get(i) != bytesToIntegers[i]) {
-                DebugGeneric<Integer> d = new DebugGeneric<>();
-                System.out.println("Original integers:");
-                d.dump(originalIntegers);
+        for (int i = 0; i < originalLongs.size(); i++) {
+            if (originalLongs.get(i) != bytesToLongs[i]) {
+                DebugGeneric<Long> d = new DebugGeneric<>();
+                System.out.println("Original longs:");
+                d.dump(originalLongs);
 
-                System.out.println("integersToBytes:");
-                Debug.dump(integersToBytes);
+                System.out.println("longsToBytes:");
+                Debug.dump(longsToBytes);
 
-                System.out.println("bytesToInts(integersToBytes):");
-                Debug.dump(bytesToIntegers);
+                System.out.println("bytesToLongs:");
+                Debug.dump(bytesToLongs);
 
-                throw new RuntimeException("Values are different: originalIntegers[" + i + "]=" + originalIntegers.get(i) +
-                        " bytesToDoubles[" + i + "]=" + bytesToIntegers[i]);
+                throw new RuntimeException("Values are different: originalLongs[" + i + "]=" + originalLongs.get(i) +
+                        " bytesToLongs[" + i + "]=" + bytesToLongs[i]);
             }
         }
     }
+
+    @Test
+    public void testShortsToBytes() throws Exception {
+        ArrayList<Short> originalShorts = new ArrayList<Short>(numberOfShorts);
+        for (int i = 0; i < numberOfShorts; i++)
+            originalShorts.add((short) (Math.random() * magnitudeS));
+
+        byte[]  shortsToBytes = BitManipulationHelper.shortsToBytes(originalShorts);
+        short[] bytesToShorts = BitManipulationHelper.bytesToShorts(shortsToBytes);
+
+        for (int i = 0; i < originalShorts.size(); i++) {
+            if (originalShorts.get(i) != bytesToShorts[i]) {
+                DebugGeneric<Short> d = new DebugGeneric<>();
+                System.out.println("Original shorts:");
+                d.dump(originalShorts);
+
+                System.out.println("shortsToBytes:");
+                Debug.dump(shortsToBytes);
+
+                System.out.println("bytesToShorts:");
+                Debug.dump(bytesToShorts);
+
+                throw new RuntimeException("Values are different: originalShorts[" + i + "]=" + originalShorts.get(i) +
+                        " bytesToShorts[" + i + "]=" + bytesToShorts[i]);
+            }
+        }
+    }
+
 }
