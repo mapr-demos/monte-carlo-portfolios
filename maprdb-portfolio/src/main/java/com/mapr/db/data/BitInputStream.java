@@ -49,7 +49,7 @@ public class BitInputStream extends InputStream
     /**
      * Construct a bit-at-a-time input stream from <code>file</code>.
      * @param file is the File that is the source of the input
-     * @throws RuntimeExceptoin if file cannot be opened.
+     * @throws RuntimeException if file cannot be opened.
      */
     public BitInputStream(File file)
     {

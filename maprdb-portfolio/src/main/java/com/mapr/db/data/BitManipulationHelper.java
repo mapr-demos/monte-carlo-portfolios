@@ -14,7 +14,7 @@ public class BitManipulationHelper {
 		return ints;
 	}
 
-	public static byte[] integersToBytesTest(List<Integer> integers) {
+	public static byte[] integersToBytesloop(List<Integer> integers) {
 		byte[] bytes = new byte[integers.size() * TypeSize.INT32_BYTESIZE];
 		int offset = 0;
 		for (Integer integer : integers) {
@@ -179,7 +179,7 @@ public class BitManipulationHelper {
 		return bytes;
 	}
 
-	public static byte[] doublesToBytesTest(List<Double> doubles) {
+	public static byte[] doublesToBytesLoop(List<Double> doubles) {
 		byte[] bytes = new byte[doubles.size() * TypeSize.DOUBLE_BYTESIZE];
 		int offset = 0;
 		for (Double doub : doubles) {
@@ -270,7 +270,7 @@ public class BitManipulationHelper {
 		return floats;
 	}
 
-	public static byte[] floatsToBytesTest(List<Float> floats) {
+	public static byte[] floatsToBytesLoop(List<Float> floats) {
 		byte[] bytes = new byte[floats.size() * TypeSize.FLOAT_BYTESIZE];
 		int offset = 0;
 		for (Float f : floats) {
@@ -446,89 +446,30 @@ public class BitManipulationHelper {
 	It goes through as many iterations as there are set bits. So if we have a 32-bit word with only the high bit set, 
 	then it will only go once through the loop.
 	 */
-	
-	public static int countSetBits(int n) { 
-	    int c = 0; // c accumulates the total bits set in n
-	    if (n < 0) {
-	    	n &= 0b01111111111111111111111111111111;
-	    	c = 1;
-	    }
-	    for (c = 0; n > 0; n = n & (n - 1))
-	    	c++; 
-	    return c; 
-	}
-	
-	
-	public static void testFloats() {
-		// Test floats
-		float[] floats = {0.123f, 1.234f, 2.345f, -0.123f, -1.234f, -2.345f};
-		ArrayList<Float> listOfFloats = new ArrayList<Float>(floats.length);
-		for (float f : floats)
-				listOfFloats.add(f);
-		
-		System.out.println("Original floats:");
-		Debug.dump(floats);
 
-		byte[] floatsToBytes = floatsToBytes(listOfFloats);
-		System.out.println("floatsToBytes:");
-		Debug.dump(floatsToBytes);
-		
-		byte[] floatsToBytesTest = floatsToBytesTest(listOfFloats);
-		System.out.println("floatsToBytesTest:");
-		Debug.dump(floatsToBytesTest);
-		
-		int[] floatsToInts = floatsToInts(floats, 0, floats.length);
-		System.out.println("floatsToInts:");
-		Debug.dump(floatsToInts);
-		
-		float[] intsToFloats = intsToFloats(floatsToInts);
-		System.out.println("intsToFloats(floatsToInts):");
-		Debug.dump(intsToFloats);
-				
-		float[] bytesToFloats = bytesToFloats(floatsToBytes);
-		System.out.println("bytesToFloats(floatsToBytes):");
-		Debug.dump(bytesToFloats);
-		
-		float[] bytesToFloatsTest = bytesToFloats(floatsToBytesTest);
-		System.out.println("bytesToFloats(floatsToBytesTest):");
-		Debug.dump(bytesToFloatsTest);
-
+	// 32-bit version
+	public static int countSetBits(int n) {
+		int c; // c accumulates the total bits set in n
+		if (n < 0) {
+//			n &= 0b01111111111111111111111111111111;
+			n &= ((1 << 31) - 1);
+		}
+		for (c = 0; n > 0; n = n & (n - 1))
+			c++;
+		return c;
 	}
 
-	public static void testDoubles() {
-		double[] doubles = {0.123d, 1.234d, 2.345d, -0.123d, -1.234d, -2.345d};
-		ArrayList<Double> listOfDoubles = new ArrayList<Double>(doubles.length);
-		for (double d : doubles)
-			listOfDoubles.add(d);
-		
-		System.out.println("Original doubles:");
-		Debug.dump(doubles);
-
-		byte[] doublesToBytes = doublesToBytes(listOfDoubles);
-		System.out.println("doublesToBytes:");
-		Debug.dump(doublesToBytes);
-		
-		byte[] doublesToBytesTest = doublesToBytesTest(listOfDoubles);
-		System.out.println("doublesToBytesTest:");
-		Debug.dump(doublesToBytesTest);
-
-		long[] doublesToLongs = doublesToLongs(doubles, 0, doubles.length);
-		System.out.println("doublesToLongs:");
-		Debug.dump(doublesToLongs);
-		
-		double[] longsToDoubles = longsToDoubles(doublesToLongs);
-		System.out.println("longsToDoubles(doublesToLongs):");
-		Debug.dump(longsToDoubles);
-				
-		double[] bytesToDoubles = bytesToDoubles(doublesToBytes);
-		System.out.println("bytesToDoubles(doublesToBytes):");
-		Debug.dump(bytesToDoubles);
-		
-		double[] bytesToDoublesTest = bytesToDoubles(doublesToBytesTest);
-		System.out.println("bytesToDoubles(doublesToBytesTest):");
-		Debug.dump(bytesToDoublesTest);
+	// 64-bit version
+	public static int countSetBits(long n) {
+		int c; // c accumulates the total bits set in n
+		if (n < 0) {
+			n &= ((1 << 63) - 1);
+		}
+		for (c = 0; n > 0; n = n & (n - 1))
+			c++;
+		return c;
 	}
-	
+
 	public static void testShorts() {
 		short[] shorts = {12345, 23456, 32765, -12345, -23456, -32765};
 		ArrayList<Short> listOfShorts = new ArrayList<Short>(shorts.length);
@@ -542,45 +483,19 @@ public class BitManipulationHelper {
 		System.out.println("shortsToBytes:");
 		Debug.dump(shortsToBytes);
 		
-		byte[] shortsToBytesTest = shortsToBytesTest(listOfShorts);
-		System.out.println("shortsToBytesTest:");
-		Debug.dump(shortsToBytesTest);
-		
 		short[] bytesToShorts = bytesToShorts(shortsToBytes);
 		System.out.println("bytesToShorts(shortsToBytes):");
 		Debug.dump(bytesToShorts);
-	
-		short[] bytesToShortsTest = bytesToShorts(shortsToBytesTest);
+
+
+        byte[] shortsToBytesTest = shortsToBytesTest(listOfShorts);
+        System.out.println("shortsToBytesTest:");
+        Debug.dump(shortsToBytesTest);
+
+        short[] bytesToShortsTest = bytesToShorts(shortsToBytesTest);
 		System.out.println("bytesToShorts(shortsToBytesTest):");
 		Debug.dump(bytesToShortsTest);
 	
-	}
-
-	public static void testIntegers() {
-		int[] ints = {123456987, 123456789, 234567890, -123456987, -123456789, -234567890};
-		ArrayList<Integer> listOfIntegers = new ArrayList<Integer>(ints.length);
-		for (int i : ints)
-			listOfIntegers.add(i);
-		
-		System.out.println("Original integers:");
-		Debug.dump(ints);
-	
-		byte[] integersToBytes = integersToBytes(listOfIntegers);
-		System.out.println("integersToBytes:");
-		Debug.dump(integersToBytes);
-		
-		byte[] integersToBytesTest = integersToBytesTest(listOfIntegers);
-		System.out.println("integersToBytesTest:");
-		Debug.dump(integersToBytesTest);
-		
-		int[] bytesToIntegers = bytesToInts(integersToBytes);
-		System.out.println("bytesToInts(integersToBytes):");
-		Debug.dump(bytesToIntegers);
-
-		int[] bytesToIntegersTest = bytesToInts(integersToBytesTest);
-		System.out.println("bytesToInts(integersToBytesTest):");
-		Debug.dump(bytesToIntegersTest);
-
 	}
 
 	public static void testLongs() {
@@ -610,25 +525,31 @@ public class BitManipulationHelper {
 	
 	}
 
-	public static void testBitCount() {
+	public static void testBitCount32() {
 		int[] ints = {123456987, 123456789, 234567890, -123456987, -123456789, -234567890};
 		for (int i : ints)
 			System.out.println(i + " has " + countSetBits(i) + " bit(s) set");
-		
+
 	}
-	
+
+	public static void testBitCount64() {
+		long[] longs = {123456987L, 123456789L, 234567890L, -123456987L, -123456789L, -234567890L};
+		for (long i : longs)
+			System.out.println(i + " has " + countSetBits(i) + " bit(s) set");
+
+		long[] morelongs = {12341346136556987L, 1236361343456789L, 2345673653416346890L, -12345431625466987L, -123456736341689L, -23456341613467890L};
+		for (long i : morelongs)
+			System.out.println(i + " has " + countSetBits(i) + " bit(s) set");
+
+	}
 	public static void main(String[] args) {
-		testFloats();
-		System.out.println();
-		testDoubles();
-		System.out.println();
-		testIntegers();
-		System.out.println();
-		testLongs();
+        testLongs();
 		System.out.println();
 		testShorts();
 		System.out.println();
-		testBitCount();
+		testBitCount32();
+		System.out.println();
+		testBitCount64();
 	}
 
 }

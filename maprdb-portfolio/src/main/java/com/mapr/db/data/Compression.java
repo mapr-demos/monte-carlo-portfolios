@@ -120,7 +120,7 @@ public class Compression {
 			uncompressedSize += uncompressedSigns.length * 4;
 		}
 
-		byte[] gzipCompressedSigns = null;
+		byte[] gzipCompressedSigns;
 		try {
 			gzipCompressedSigns = compressGzip(BitManipulationHelper.intsToBytes(uncompressedSigns, 0, uncompressedSigns.length));
 			bestCompressedSigns = gzipCompressedSigns;
@@ -133,7 +133,7 @@ public class Compression {
 			e1.printStackTrace();
 		}
 
-		byte[] zipCompressedSigns = null;
+		byte[] zipCompressedSigns;
 		try {
 			zipCompressedSigns = compressZip(BitManipulationHelper.intsToBytes(uncompressedSigns, 0, uncompressedSigns.length));
 			if (bestCompressedSigns == null || zipCompressedSigns.length < bestCompressedSigns.length) {
@@ -156,7 +156,7 @@ public class Compression {
 			uncompressedSize += uncompressedExponents.length * 4;
 		}
 
-		byte[] gzipCompressedExponents = null;
+		byte[] gzipCompressedExponents;
 		try {
 			gzipCompressedExponents = compressGzip(BitManipulationHelper.intsToBytes(uncompressedExponents, 0, uncompressedExponents.length));
 			bestCompressedExponents = gzipCompressedExponents;
@@ -169,7 +169,7 @@ public class Compression {
 			e.printStackTrace();
 		}
 
-		byte[] zipCompressedExponents = null;
+		byte[] zipCompressedExponents;
 		try {
 			zipCompressedExponents = compressZip(BitManipulationHelper.intsToBytes(uncompressedExponents, 0, uncompressedExponents.length));
 			if (bestCompressedExponents == null || zipCompressedExponents.length < bestCompressedExponents.length) {
@@ -192,7 +192,7 @@ public class Compression {
 			uncompressedSize += uncompressedSignificands.length * 4;
 		}
 
-		byte[] gzipCompressedSignificands = null;
+		byte[] gzipCompressedSignificands;
 		try {
 			gzipCompressedSignificands = compressGzip(BitManipulationHelper.intsToBytes(uncompressedSignificands, 0, uncompressedSignificands.length));
 			bestCompressedSignificands = gzipCompressedSignificands;
@@ -205,7 +205,7 @@ public class Compression {
 			e.printStackTrace();
 		}
 
-		byte[] zipCompressedSignificands = null;
+		byte[] zipCompressedSignificands;
 		try {
 			zipCompressedSignificands = compressZip(BitManipulationHelper.intsToBytes(uncompressedSignificands, 0, uncompressedSignificands.length));
 			if (bestCompressedSignificands == null || zipCompressedSignificands.length < bestCompressedSignificands.length) {
@@ -1081,15 +1081,15 @@ public class Compression {
 
 	public static void main(String[] args) throws Exception {
 
-//		System.out.println("testDeltaValWithIntegers()");
-//		testDeltaValWithIntegers();
-//		System.out.println("\ntestDeltaValWithLongs()");
-//		testDeltaValWithLongs();
+		System.out.println("testDeltaValWithIntegers()");
+		testDeltaValWithIntegers();
+		System.out.println("\ntestDeltaValWithLongs()");
+		testDeltaValWithLongs();
 		System.out.println("\ntestDeltaXorWithFloats()");
 		testDeltaXorWithFloats();
-//		System.out.println("\ntestTranspose32b()");
-//		testTranspose32b();
+		System.out.println("\ntestTranspose32b()");
+		testTranspose32b();
 	
-//		testBitStorage();
+		testBitStorage();
 	}
 }
