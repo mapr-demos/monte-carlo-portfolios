@@ -44,9 +44,9 @@ public class LoadPortfolios {
 			System.exit(1);
 		}
 
-		new LoadPortfolios().load(opts);
+		new LoadPortfolios().parseAndLoad(opts);
 	}
-	public void load(Options options) throws IOException {
+	private void parseAndLoad(Options options) throws IOException {
 		if (options == null) {
 			System.err.println("No command line options received. Exiting.");
 			System.exit(1);
@@ -115,15 +115,19 @@ public class LoadPortfolios {
 			System.err.println("DebugJson:     " + debugJson);
 		}
 
-		 table = getTable(tablePath);
+        table = getTable(tablePath);
 
-		if (fileFormat == Format.JSON)
-			loadFromJSON(options);
-		else {
-			System.out.println("Unknown file format or not implemented yet. Format: " + fileFormat);
-			System.exit(1);
-		}
-	}
+        switch (fileFormat) {
+            case JSON:
+                loadFromJSON(options);
+                break;
+            case TSV:
+            case CSV:
+            default:
+                System.out.println("Unknown file format or not implemented yet. Format: " + fileFormat);
+                System.exit(1);
+        }
+    }
 	
 	private Table getTable(String tableName) {
 		if (verbose)
@@ -170,256 +174,249 @@ public class LoadPortfolios {
 		return null;
 	}
 
-	public void loadFromJSON(Options options) {
-		int depth = 0;
-		try {
-			JsonFactory jFactory = new JsonFactory();
-			JsonParser jParser = jFactory.createParser(new File(filePath));
+    private void loadFromJSON(Options options) {
+        int depth = 0;
+        try {
+            JsonFactory jFactory = new JsonFactory();
+            JsonParser jParser = jFactory.createParser(new File(filePath));
 
-			String idElement = null;
-			String idValue = null;
+            String idElement = null;
+            String idValue = null;
 
-			if (options.jsonKey != null && !options.jsonKey.equals("")) {
-				idElement = options.jsonKey;
-				if (verbose)
-					System.err.println("Loading from JSON. Key name: " + idElement);
-			} else {
-				System.err.println("Don't know the name of the field to use as the key.");
-				return;
-			}
+            if (options.jsonKey != null && !options.jsonKey.equals("")) {
+                idElement = options.jsonKey;
+                if (verbose)
+                    System.err.println("Loading from JSON. Key name: " + idElement);
+            } else {
+                System.err.println("Don't know the name of the field to use as the key.");
+                return;
+            }
 
-			ArrayList<Integer> instruments = null;
-			Integer min_instrument = Integer.MAX_VALUE;
-			Integer max_instrument = Integer.MIN_VALUE;
+            ArrayList<Integer> instruments = null;
+            Integer min_instrument = Integer.MAX_VALUE;
+            Integer max_instrument = Integer.MIN_VALUE;
 
-			ArrayList<Double> weights = null;
-			Double min_weight = Double.MAX_VALUE;
-			Double max_weight = Double.MIN_VALUE;
+            ArrayList<Double> weights = null;
+            Double min_weight = Double.MAX_VALUE;
+            Double max_weight = Double.MIN_VALUE;
 
-			Document document = null;
-						
-			while (jParser.nextToken() != null) {
+            Document document = null;
 
-				String fieldName = jParser.getCurrentName();
+            while (jParser.nextToken() != null) {
 
-				switch (jParser.getCurrentToken()) {
+                String fieldName = jParser.getCurrentName();
 
-				case START_OBJECT:
-					if (depth == 0) {
-						System.out.println();
-						if (verbose)
-							System.err.println("New MapRDB Document created");
-						// Reset everything
-						document = MapRDB.newDocument();
-						min_instrument = Integer.MAX_VALUE;
-						max_instrument = Integer.MIN_VALUE;
-						min_weight = Double.MAX_VALUE;
-						max_weight = Double.MIN_VALUE;
-						start_date = null;
-						end_date = null;
-					}
-					depth++;
-					break;
+                switch (jParser.getCurrentToken()) {
 
-				case END_OBJECT:
-					depth--;
-					// When the depth reaches zero on an end of object, we are done.
-					// At this point, we can call insert() or insertandreplace()
-					if (depth == 0) {
-						if (idValue != null) {
-							if (verbose)
-								System.err.println("Setting ID for document: id=" + idValue);
+                    case START_OBJECT:
+                        if (depth == 0) {
+                            System.out.println();
+                            if (verbose)
+                                System.err.println("New MapRDB Document created");
+                            // Reset everything
+                            document = MapRDB.newDocument();
+                            min_instrument = Integer.MAX_VALUE;
+                            max_instrument = Integer.MIN_VALUE;
+                            min_weight = Double.MAX_VALUE;
+                            max_weight = Double.MIN_VALUE;
+                            start_date = null;
+                            end_date = null;
+                        }
+                        depth++;
+                        break;
 
-							// Set the metadata + document ID
-							document.set("_id", idValue);
-							Document metadata = MapRDB.newDocument()
-									.set("min_instrument", min_instrument)
-									.set("max_instrument", max_instrument)
-									.set("min_weight", min_weight)
-									.set("max_weight", max_weight);
-							document.set("metadata", metadata);
-							
-							if (verbose) {
-								System.err.println("Compressing Instruments");
-								System.err.println("Size instruments.size():             " + instruments.size());
-							}
+                    case END_OBJECT:
+                        depth--;
+                        // When the depth reaches zero on an end of object, we are done.
+                        // At this point, we can call insert() or insertandreplace()
+                        if (depth == 0) {
+                            if (idValue != null) {
+                                if (verbose)
+                                    System.err.println("Setting ID for document: id=" + idValue);
 
-							byte[] compressedInstruments = getCompressedInstruments(instruments);
-							String instrumentCompressorName;
-							
-							if (compressedInstruments.length < instruments.size() * TypeSize.INT32_BYTESIZE) {
-								document.set("instruments", getInstrumentDocument(instruments.size(), compressedInstruments, integerCodecName));
-								instrumentCompressorName = integerCodecName;
-							}
-							else {
-								document.set("instruments", getInstrumentDocument(instruments.size(), BitManipulationHelper.integersToBytes(instruments), "none"));
-								instrumentCompressorName = "none";
-							}
+                                // Set the metadata + document ID
+                                document.set("_id", idValue);
+                                Document metadata = MapRDB.newDocument()
+                                        .set("min_instrument", min_instrument)
+                                        .set("max_instrument", max_instrument)
+                                        .set("min_weight", min_weight)
+                                        .set("max_weight", max_weight);
+                                document.set("metadata", metadata);
 
-							if (debug) {
-								System.out.println("loadFromJson: Content of compressedInstruments instrumentCompressorName: " + instrumentCompressorName);
-								Debug.dump(compressedInstruments);
-							}
+                                if (verbose) {
+                                    System.err.println("Compressing Instruments");
+                                    System.err.println("Size instruments.size():             " + instruments.size());
+                                }
 
-							// Compress the weights
-							if (verbose)
-								System.err.println("Compressing weights");
-							
-							byte[] compressedWeights = getCompressedWeights(weights);
-//							if (debug) {
-//								System.out.println("loadFromJson: Content of compressedWeights");
-//								dumpBuffer(compressedWeights);
-//							}
-							String weightCompressorName;
-							if (compressedWeights.length < weights.size() * TypeSize.DOUBLE_BYTESIZE) {
-								document.set("weights", getWeightDocument(weights.size(), compressedWeights, floatCompressorName));
-								weightCompressorName = floatCompressorName;
-							}
-							else {
-								document.set("weights", getWeightDocument(weights.size(), BitManipulationHelper.doublesToBytes(weights), "none"));
-								weightCompressorName = "none";
-							}
-								// Insert document in MapRDB
-							if (verbose)
-								System.err.println("Inserting document into MapRDB");
-							
-							if (table == null)
-								System.err.println("The table object is null! Cannot insert");
-							else
-								try {
-									if (check)
-										System.out.println(document);
+                                byte[] compressedInstruments = getCompressedInstruments(instruments);
+                                String instrumentCompressorName;
 
-									table.insertOrReplace(document);
+                                if (compressedInstruments.length < instruments.size() * TypeSize.INT32_BYTESIZE) {
+                                    document.set("instruments", getInstrumentDocument(instruments.size(), compressedInstruments, integerCodecName));
+                                    instrumentCompressorName = integerCodecName;
+                                } else {
+                                    document.set("instruments", getInstrumentDocument(instruments.size(), BitManipulationHelper.integersToBytes(instruments), "none"));
+                                    instrumentCompressorName = "none";
+                                }
 
-									if (check) {
-										System.err.println("Checking compressed instruments");
-										if (instrumentCompressorName.equals(integerCodecName))
-											checkInstrumentsInMapRDB(idValue, instruments, compressedInstruments);
-										else
-											checkInstrumentsInMapRDB(idValue, instruments, BitManipulationHelper.integersToBytes(instruments));
+                                if (debug) {
+                                    System.out.println("loadFromJson: Content of compressedInstruments instrumentCompressorName: " + instrumentCompressorName);
+                                    Debug.dump(compressedInstruments);
+                                }
 
-										System.err.println("Checking compressed weights");
-										if (weightCompressorName.equals(floatCompressorName))
-											checkWeightsInMapRDB(idValue, weights, compressedWeights);
-										else
-											checkWeightsInMapRDB(idValue, weights, BitManipulationHelper.doublesToBytes(weights));
-									}
-								} catch (DocumentExistsException dee) {
-									System.err.println("Exception during insert : " + dee.getMessage());
-								}
+                                // Compress the weights
+                                if (verbose)
+                                    System.err.println("Compressing weights");
 
-							if (verbose)
-								System.err.println("Clearing instruments");
-							instruments.clear();
+                                byte[] compressedWeights = getCompressedWeights(weights);
+                                String weightCompressorName;
+                                if (compressedWeights.length < weights.size() * TypeSize.DOUBLE_BYTESIZE) {
+                                    document.set("weights", getWeightDocument(weights.size(), compressedWeights, floatCompressorName));
+                                    weightCompressorName = floatCompressorName;
+                                } else {
+                                    document.set("weights", getWeightDocument(weights.size(), BitManipulationHelper.doublesToBytes(weights), "none"));
+                                    weightCompressorName = "none";
+                                }
+                                // Insert document in MapRDB
+                                if (verbose)
+                                    System.err.println("Inserting document into MapRDB");
 
-							if (verbose)
-								System.err.println("Clearing weights");
-							weights.clear();
+                                if (table == null)
+                                    System.err.println("The table object is null! Cannot insert");
+                                else
+                                    try {
+                                        if (check)
+                                            System.out.println(document);
 
-						} else {
-							System.err.println("Couldn't determine the ID for the document. NOT inserting.");
-						}
-					}
-					break;
+                                        table.insertOrReplace(document);
 
-				case START_ARRAY:
-					if (fieldName.equals("instruments") && instruments == null && weights == null) {
-						// We create new arrays to store the columnar data (uncompressed)
-						instruments = new ArrayList<Integer>(COLUMN_BLOCK_SIZE);
-						weights     = new ArrayList<Double>(COLUMN_BLOCK_SIZE);
-						if (verbose)
-							System.err.println("New ArrayList<Integer> & ArrayList<Double> created");
-					}
-					depth++;
-					break;
+                                        if (check) {
+                                            System.err.println("Checking compressed instruments");
+                                            if (instrumentCompressorName.equals(integerCodecName))
+                                                checkInstrumentsInMapRDB(idValue, instruments, compressedInstruments);
+                                            else
+                                                checkInstrumentsInMapRDB(idValue, instruments, BitManipulationHelper.integersToBytes(instruments));
 
-				case END_ARRAY:
-					depth--;
-					break;
-				
-				// Not used
-				case FIELD_NAME:
-				case NOT_AVAILABLE:
-				case VALUE_EMBEDDED_OBJECT:
-					break;
+                                            System.err.println("Checking compressed weights");
+                                            if (weightCompressorName.equals(floatCompressorName))
+                                                checkWeightsInMapRDB(idValue, weights, compressedWeights);
+                                            else
+                                                checkWeightsInMapRDB(idValue, weights, BitManipulationHelper.doublesToBytes(weights));
+                                        }
+                                    } catch (DocumentExistsException dee) {
+                                        System.err.println("Exception during insert : " + dee.getMessage());
+                                    }
 
-				// These actually add things to the array or object
-				case VALUE_NULL:
-					if (fieldName != null) {
-						document.setNull(fieldName);
-					}
-					break;
+                                if (verbose)
+                                    System.err.println("Clearing instruments");
+                                instruments.clear();
 
-				case VALUE_NUMBER_FLOAT:
-					if (fieldName != null) {
-						if (fieldName.equals("weight")) {
-							double weight = jParser.getDoubleValue();
-							weights.add(weight);
-							if (weight > max_weight)
-								max_weight = weight;
-							if (weight < min_weight)
-								min_weight = weight;
-						}
-					}
-					break;
+                                if (verbose)
+                                    System.err.println("Clearing weights");
+                                weights.clear();
 
-				case VALUE_NUMBER_INT:
-					if (fieldName != null) {
-						if (fieldName.equals(idElement)) {
-							idValue = jParser.getValueAsString();
-						} else if (fieldName.equals("instrument")) {
-							Integer instrument = jParser.getIntValue();
-							instruments.add(instrument);
-							if (instrument > max_instrument)
-								max_instrument = instrument;
-							if (instrument < min_instrument)
-								min_instrument = instrument;
-						} else
-							document.set(fieldName, jParser.getLongValue());
-					}
-					break;
+                            } else {
+                                System.err.println("Couldn't determine the ID for the document. NOT inserting.");
+                            }
+                        }
+                        break;
 
-				case VALUE_STRING:
-					if (fieldName != null) {
-						if (fieldName.equals(idElement))
-							idValue = jParser.getText();
-						if (fieldName.equals("start"))
-							start_date = jParser.getText();
-						if (fieldName.equals("end"))
-							end_date = jParser.getText();
-					} else {
-						document.set(fieldName, jParser.getText());
-					}
-					break;
+                    case START_ARRAY:
+                        if (fieldName.equals("instruments") && instruments == null && weights == null) {
+                            // We create new arrays to store the columnar data (uncompressed)
+                            instruments = new ArrayList<Integer>(COLUMN_BLOCK_SIZE);
+                            weights = new ArrayList<Double>(COLUMN_BLOCK_SIZE);
+                            if (verbose)
+                                System.err.println("New ArrayList<Integer> & ArrayList<Double> created");
+                        }
+                        depth++;
+                        break;
 
-				case VALUE_FALSE:
-				case VALUE_TRUE:
-					if (fieldName != null) {
-						document.set(fieldName, jParser.getBooleanValue());
-					}
-					break;
-				}
+                    case END_ARRAY:
+                        depth--;
+                        break;
 
-				if (debugJson) {
-					for (int i = 0; i < depth; i++)
-						System.out.print("-");
-					System.out.println("> " + jParser.getCurrentToken().toString() + ": " + fieldName);
-				}
-			}
-			jParser.close();
-			if (table != null) {
-				if (verbose)
-					System.err.println("Flushing");
-				table.flush();
-			}
-			else
-				System.err.println("table is null. Cannot flush.");
+                    // Not used
+                    case FIELD_NAME:
+                    case NOT_AVAILABLE:
+                    case VALUE_EMBEDDED_OBJECT:
+                        break;
 
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
+                    // These actually add things to the array or object
+                    case VALUE_NULL:
+                        if (fieldName != null) {
+                            document.setNull(fieldName);
+                        }
+                        break;
+
+                    case VALUE_NUMBER_FLOAT:
+                        if (fieldName != null) {
+                            if (fieldName.equals("weight")) {
+                                double weight = jParser.getDoubleValue();
+                                weights.add(weight);
+                                if (weight > max_weight)
+                                    max_weight = weight;
+                                if (weight < min_weight)
+                                    min_weight = weight;
+                            }
+                        }
+                        break;
+
+                    case VALUE_NUMBER_INT:
+                        if (fieldName != null) {
+                            if (fieldName.equals(idElement)) {
+                                idValue = jParser.getValueAsString();
+                            } else if (fieldName.equals("instrument")) {
+                                Integer instrument = jParser.getIntValue();
+                                instruments.add(instrument);
+                                if (instrument > max_instrument)
+                                    max_instrument = instrument;
+                                if (instrument < min_instrument)
+                                    min_instrument = instrument;
+                            } else
+                                document.set(fieldName, jParser.getLongValue());
+                        }
+                        break;
+
+                    case VALUE_STRING:
+                        if (fieldName != null) {
+                            if (fieldName.equals(idElement))
+                                idValue = jParser.getText();
+                            if (fieldName.equals("start"))
+                                start_date = jParser.getText();
+                            if (fieldName.equals("end"))
+                                end_date = jParser.getText();
+                        } else {
+                            document.set(fieldName, jParser.getText());
+                        }
+                        break;
+
+                    case VALUE_FALSE:
+                    case VALUE_TRUE:
+                        if (fieldName != null) {
+                            document.set(fieldName, jParser.getBooleanValue());
+                        }
+                        break;
+                }
+
+                if (debugJson) {
+                    for (int i = 0; i < depth; i++)
+                        System.out.print("-");
+                    System.out.println("> " + jParser.getCurrentToken().toString() + ": " + fieldName);
+                }
+            }
+            jParser.close();
+            if (table != null) {
+                if (verbose)
+                    System.err.println("Flushing");
+                table.flush();
+            } else
+                System.err.println("table is null. Cannot flush.");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
 	private void checkWeightsInMapRDB(String idValue, ArrayList<Double> weights, byte[] referenceWeights) {
 
@@ -664,7 +661,7 @@ public class LoadPortfolios {
 		return decompressedInstruments;
 	}
 
-	public static enum Format {
+	public enum Format {
 		JSON, TSV, CSV
 	}
 

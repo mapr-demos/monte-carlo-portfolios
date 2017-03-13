@@ -94,6 +94,49 @@ public class BitManipulationHelper {
 		return longs;
 	}
 
+    public static byte[] longsToBytes(long[] longs, int startFrom, int endAt) {
+        if (startFrom < 0 || startFrom > longs.length) {
+            System.err.println("Returning null! startFrom: " + startFrom + " longs.length: " + longs.length);
+            return null;
+        }
+        if (endAt < 0 || endAt > longs.length) {
+            System.err.println("Returning null! endAt: " + endAt + " longs.length: " + longs.length);
+            return null;
+        }
+        if (endAt < startFrom) {
+            System.err.println("Returning null! endAt: " + endAt + " startFrom: " + startFrom);
+            return null;
+        }
+
+        int numberOfLongs = endAt - startFrom;
+
+        /*
+            x86 is little Endian:
+
+            0A.0B.0C.0D.
+             |  |  |  |
+             |  |  |  |-> a + 0: 0D
+             |  |  |----> a + 1: 0C
+             |  |-------> a + 2: 0B
+             |----------> a + 3: 0A
+        */
+
+        byte[] bytes = new byte[numberOfLongs * TypeSize.INT64_BYTESIZE];
+
+        int offset = 0;
+        for (int idx = startFrom; idx < endAt; idx++) {
+            bytes[offset++] = (byte) ((longs[idx] >> 56) & 0xFF);
+            bytes[offset++] = (byte) ((longs[idx] >> 48) & 0xFF);
+            bytes[offset++] = (byte) ((longs[idx] >> 40) & 0xFF);
+            bytes[offset++] = (byte) ((longs[idx] >> 32) & 0xFF);
+            bytes[offset++] = (byte) ((longs[idx] >> 24) & 0xFF);
+            bytes[offset++] = (byte) ((longs[idx] >> 16) & 0xFF);
+            bytes[offset++] = (byte) ((longs[idx] >> 8) & 0xFF);
+            bytes[offset++] = (byte) ((longs[idx] >> 0) & 0xFF);
+        }
+        return bytes;
+    }
+
 	public static byte[] longsToBytes(List<Long> listOfLongs) {
 		byte[] bytes = new byte[listOfLongs.size() * TypeSize.INT64_BYTESIZE];
 		int offset = 0;

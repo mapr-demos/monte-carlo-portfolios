@@ -1,6 +1,6 @@
 package com.mapr.db.data;
 
-public class CompressedFloatArray {
+public class CompressedDoubleArray {
 
 	public enum WIDTH {
 	    THIRTY_TWO,
@@ -19,14 +19,14 @@ public class CompressedFloatArray {
 
 	public final WIDTH width;
 	
-	public CompressedFloatArray(	byte[] compressedSigns,
-									byte[] compressedExponents,
-									byte[] compressedSignificands,
-									CompressionAlgorithms signsAlgorithm,
-									CompressionAlgorithms exponentsAlgorithm,
-									CompressionAlgorithms significandsAlgorithm,
-									int uncompressedArrayLength,
-									WIDTH width) {
+	public CompressedDoubleArray(byte[] compressedSigns,
+                                 byte[] compressedExponents,
+                                 byte[] compressedSignificands,
+                                 CompressionAlgorithms signsAlgorithm,
+                                 CompressionAlgorithms exponentsAlgorithm,
+                                 CompressionAlgorithms significandsAlgorithm,
+                                 int uncompressedArrayLength,
+                                 WIDTH width) {
 
 		this.compressedSigns         = compressedSigns;
 		this.compressedExponents     = compressedExponents;

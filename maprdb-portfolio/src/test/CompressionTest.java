@@ -1,7 +1,7 @@
 /**
  * Created by pborne on 3/12/17.
  */
-import com.mapr.db.data.CompressedFloatArray;
+import com.mapr.db.data.CompressedDoubleArray;
 import com.mapr.db.data.Compression;
 import com.mapr.db.data.Debug;
 import org.junit.Test;
@@ -88,8 +88,8 @@ public class CompressionTest {
     }
 
     @Test
-    public void testDeltaXorWithFloats() throws Exception {
-        float[] originalFloats = new float[65536];
+    public void testDeltaXorWithFloats32() throws Exception {
+        float[] originalFloats = new float[8192];
 
         // Test when all the values are positive
         System.out.println("");
@@ -98,8 +98,8 @@ public class CompressionTest {
         for (int i = 1; i < originalFloats.length; i++)
             originalFloats[i] = originalFloats[0] + (float) Math.random() ;
 
-        CompressedFloatArray   compressed = Compression.deltaXorEncode(originalFloats);
-        float[]              uncompressed = Compression.deltaXorDecode(compressed);
+        CompressedDoubleArray compressed = Compression.deltaXorEncode32(originalFloats);
+        float[]              uncompressed = Compression.deltaXorDecode32(compressed);
 
         for (int i = 0; i < originalFloats.length; i++) {
             if (originalFloats[i] != uncompressed[i]) {
@@ -120,8 +120,8 @@ public class CompressionTest {
         for (int i = 1; i < originalFloats.length; i++)
             originalFloats[i] *= Math.random() > 0.5 ? 1f : -1f;
 
-        compressed   = Compression.deltaXorEncode(originalFloats);
-        uncompressed = Compression.deltaXorDecode(compressed);
+        compressed   = Compression.deltaXorEncode32(originalFloats);
+        uncompressed = Compression.deltaXorDecode32(compressed);
 
         for (int i = 0; i < originalFloats.length; i++) {
             if (originalFloats[i] != uncompressed[i]) {
@@ -140,8 +140,8 @@ public class CompressionTest {
         System.out.println("Using a mix of positive/negative numbers (sorted)");
         Arrays.sort(originalFloats);
 
-        compressed   = Compression.deltaXorEncode(originalFloats);
-        uncompressed = Compression.deltaXorDecode(compressed);
+        compressed   = Compression.deltaXorEncode32(originalFloats);
+        uncompressed = Compression.deltaXorDecode32(compressed);
 
         for (int i = 0; i < originalFloats.length; i++) {
             if (originalFloats[i] != uncompressed[i]) {
@@ -152,6 +152,77 @@ public class CompressionTest {
                 Debug.dump(uncompressed);
 
                 throw new RuntimeException("Values are different: originalFloats[" + i + "]=" + originalFloats[i] +
+                        " uncompressed[" + i + "]=" + uncompressed[i]);
+            }
+        }
+
+    }
+
+    @Test
+    public void testDeltaXorWithFloats64() throws Exception {
+        double[] originalDoubles = new double[8192];
+
+        // Test when all the values are positive
+        System.out.println("");
+        System.out.println("Using only positive values");
+        originalDoubles[0] = 1.1d;
+        for (int i = 1; i < originalDoubles.length; i++)
+            originalDoubles[i] = originalDoubles[0] + Math.random();
+
+        CompressedDoubleArray compressed = Compression.deltaXorEncode64(originalDoubles);
+        double[]             uncompressed = Compression.deltaXorDecode64(compressed);
+
+        for (int i = 0; i < originalDoubles.length; i++) {
+            if (originalDoubles[i] != uncompressed[i]) {
+                System.out.println("Original doubles:");
+                Debug.dump(originalDoubles);
+
+                System.out.println("uncompressed:");
+                Debug.dump(uncompressed);
+
+                throw new RuntimeException("Values are different: originalDoubles[" + i + "]=" + originalDoubles[i] +
+                        " uncompressed[" + i + "]=" + uncompressed[i]);
+            }
+        }
+
+        // Mix of positive/negative numbers
+        System.out.println("");
+        System.out.println("Using a mix of positive/negative numbers (not sorted)");
+        for (int i = 1; i < originalDoubles.length; i++)
+            originalDoubles[i] *= Math.random() > 0.5d ? 1.0d : -1.0d;
+
+        compressed   = Compression.deltaXorEncode64(originalDoubles);
+        uncompressed = Compression.deltaXorDecode64(compressed);
+
+        for (int i = 0; i < originalDoubles.length; i++) {
+            if (originalDoubles[i] != uncompressed[i]) {
+                System.out.println("Original doubles:");
+                Debug.dump(originalDoubles);
+
+                System.out.println("uncompressed:");
+                Debug.dump(uncompressed);
+
+                throw new RuntimeException("Values are different: originalDoubles[" + i + "]=" + originalDoubles[i] +
+                        " uncompressed[" + i + "]=" + uncompressed[i]);
+            }
+        }
+
+        System.out.println("");
+        System.out.println("Using a mix of positive/negative numbers (sorted)");
+        Arrays.sort(originalDoubles);
+
+        compressed   = Compression.deltaXorEncode64(originalDoubles);
+        uncompressed = Compression.deltaXorDecode64(compressed);
+
+        for (int i = 0; i < originalDoubles.length; i++) {
+            if (originalDoubles[i] != uncompressed[i]) {
+                System.out.println("Original doubles:");
+                Debug.dump(originalDoubles);
+
+                System.out.println("uncompressed:");
+                Debug.dump(uncompressed);
+
+                throw new RuntimeException("Values are different: originalDoubles[" + i + "]=" + originalDoubles[i] +
                         " uncompressed[" + i + "]=" + uncompressed[i]);
             }
         }

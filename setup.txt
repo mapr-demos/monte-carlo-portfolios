@@ -17,26 +17,6 @@ java -jar /Users/pborne/Desktop/MapR/Code/log-synth/target/log-synth-0.1-SNAPSHO
 
 vim /Users/pborne/Desktop/MapR/Code/monte-carlo-portfolios/synth/portfolios.synth
 
-		@Option(name = "-help")
-		private boolean help = false;
-
-		@Option(name = "-verbose")
-		private boolean verbose = false;
-
-		@Option(name = "-filepath")
-		private String filepath = null;
-
-		@Option(name = "-format")
-		private String format = null;
-
-		@Option(name = "-table")
-		private String table = null;
-
-		@Option(name = "-jsonKey")
-		private String jsonKey = null;
-		
-	private static final String HELP = "Usage: -filepath <path to file> -format JSON|TSV|CSV [-jsonKey <field name>] -table <Mapr-DB table name> [-verbose] [-help]";
-
 
 On the VM:
 groupadd mapr_test -g 503
