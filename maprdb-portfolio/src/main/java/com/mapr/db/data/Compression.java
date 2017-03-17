@@ -18,7 +18,7 @@ public class Compression {
     private static boolean compare = false;
 
     /*
-	The IEEE 754 standard specifies a binary32 as having:
+	The IEEE 754 standard specifies a float 32 as having:
 		Sign:         1 bit
 		Exponent:     8 bits
 		Significand: 24 bits (23 explicitly stored)
@@ -33,7 +33,7 @@ public class Compression {
     private static final int significandBitMask32 = 0b00000000011111111111111111111111;
 
     /*
-    The IEEE 754 standard specifies a binary64 as having:
+    The IEEE 754 standard specifies a float 64 as having:
         Sign:         1 bit
         Exponent:    11 bits
         Significand: 53 bits (52 explicitly stored)
@@ -604,7 +604,6 @@ public class Compression {
         }
 
         // decompress the 3 components
-
         long[] decompressedSigns;
         switch (compressed.signsAlgorithm) {
             case NONE:
@@ -826,7 +825,7 @@ public class Compression {
 
         // Determine the number of bits needed to encode the range
         long range = max - min;
-        int numberOfBitsToEncode = 64 - Long.numberOfLeadingZeros(range);
+        int numberOfBitsToEncode = TypeSize.INT64_BITSIZE - Long.numberOfLeadingZeros(range);
 
         if (debug)
             System.out.println("Min: " + min + " Max: " + max + " Range: " + range + " Number of bits to encode: " + numberOfBitsToEncode);
@@ -835,7 +834,7 @@ public class Compression {
         // + 1 for the first entry that stores the minimum value
         // + 1 for the number of bits used to encode each delta
         // + 1 for the number of longs when decompressing
-        int numberOfCompressedLongs = 1 + (numberOfBitsToEncode * uncompressed.length) / 64;
+        int numberOfCompressedLongs = 1 + (numberOfBitsToEncode * uncompressed.length) / TypeSize.INT64_BITSIZE;
         long[] compressed = new long[1 + 1 + 1 + numberOfCompressedLongs];
 
         if (debug)
@@ -846,7 +845,7 @@ public class Compression {
         compressed[1] = ((long) numberOfBitsToEncode) << 32;
         compressed[1] |= uncompressed.length;
 
-        int bitOffset = 2 * 64; // 2 for the 2 entries above x 64 bits each,
+        int bitOffset = 2 * TypeSize.INT64_BITSIZE; // 2 for the 2 entries above x 64 bits each,
         for (long value : uncompressed) {
             writeBits(compressed, value - min, bitOffset, numberOfBitsToEncode);
             bitOffset += numberOfBitsToEncode;
@@ -869,7 +868,7 @@ public class Compression {
         if (debug)
             System.out.println("Min: " + min + " numberOfBitsToEncode: " + numberOfBitsToEncode + " uncompressed.length: " + uncompressed.length);
 
-        int offsetBitsCompressed = 2 * 64; // Skip the first 2 entries above x 64 bits each
+        int offsetBitsCompressed = 2 * TypeSize.INT64_BITSIZE; // Skip the first 2 entries above x 64 bits each
         for (int i = 0; i < uncompressed.length; i++) {
             uncompressed[i] = min + readBits(compressed, offsetBitsCompressed, numberOfBitsToEncode);
             offsetBitsCompressed += numberOfBitsToEncode;
@@ -890,7 +889,7 @@ public class Compression {
 
         // Determine the number of bits needed to encode the delta from the minimum
         int range = max - min;
-        int numberOfBitsToEncode = 32 - Integer.numberOfLeadingZeros(range);
+        int numberOfBitsToEncode = TypeSize.INT32_BITSIZE - Integer.numberOfLeadingZeros(range);
 
         if (debug)
             System.out.println("Min: " + min + " Max: " + max + " Range: " + range + " Number of bits to encode: " + numberOfBitsToEncode);
@@ -899,7 +898,7 @@ public class Compression {
         // + 1 for the first entry that stores the minimum value
         // + 1 for the number of bits used to encode each delta
         // + 1 for the number of integers when decompressing
-        int numberOfCompressedInts = 1 + (numberOfBitsToEncode * uncompressed.length) / 32;
+        int numberOfCompressedInts = 1 + (numberOfBitsToEncode * uncompressed.length) / TypeSize.INT32_BITSIZE;
         int[] compressed = new int[1 + 1 + 1 + numberOfCompressedInts];
 
         if (debug)
@@ -909,7 +908,7 @@ public class Compression {
         compressed[1] = numberOfBitsToEncode;
         compressed[2] = uncompressed.length;
 
-        int bitOffset = 3 * 32; // 3 for the 3 entries above x 32 bits each,
+        int bitOffset = 3 * TypeSize.INT32_BITSIZE; // 3 for the 3 entries above x 32 bits each,
         for (int value : uncompressed) {
             writeBits(compressed, value - min, bitOffset, numberOfBitsToEncode, false);
             bitOffset += numberOfBitsToEncode;
@@ -927,7 +926,7 @@ public class Compression {
         if (debug)
             System.out.println("Min: " + min + " numberOfBitsToEncode: " + numberOfBitsToEncode + " uncompressed.length: " + uncompressed.length);
 
-        int offsetBitsCompressed = 3 * 32; // Skip the first 3 entries above x 32 bits each
+        int offsetBitsCompressed = 3 * TypeSize.INT32_BITSIZE; // Skip the first 3 entries above x 32 bits each
         for (int i = 0; i < uncompressed.length; i++) {
             uncompressed[i] = min + readBits(compressed, offsetBitsCompressed, numberOfBitsToEncode);
             offsetBitsCompressed += numberOfBitsToEncode;

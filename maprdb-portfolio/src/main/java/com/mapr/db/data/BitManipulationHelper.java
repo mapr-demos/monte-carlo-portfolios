@@ -94,6 +94,10 @@ public class BitManipulationHelper {
 		return longs;
 	}
 
+    public static byte[] longsToBytes(long[] longs) {
+        return longsToBytes(longs, 0, longs.length);
+	}
+
     public static byte[] longsToBytes(long[] longs, int startFrom, int endAt) {
         if (startFrom < 0 || startFrom > longs.length) {
             System.err.println("Returning null! startFrom: " + startFrom + " longs.length: " + longs.length);

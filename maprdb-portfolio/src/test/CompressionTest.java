@@ -4,6 +4,7 @@
 import com.mapr.db.data.CompressedDoubleArray;
 import com.mapr.db.data.Compression;
 import com.mapr.db.data.Debug;
+import com.mapr.db.data.TypeSize;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -13,7 +14,7 @@ public class CompressionTest {
 
     @Test
     public void testDeltaValWithIntegers() throws Exception {
-        int[] originalIntegers = new int[64];
+        int[] originalIntegers = new int[65536];
         for (int i = 0; i < originalIntegers.length; i++)
             originalIntegers[i] = (int)(10f * 1023f * Math.random() * (Math.random() > 0.5 ? 1: -1));
 
@@ -35,17 +36,24 @@ public class CompressionTest {
                         " uncompressed[" + i + "]=" + uncompressed[i]);
             }
         }
+
+        // Basic stats
+        System.out.println("Original number of integers:      " + originalIntegers.length);
+        System.out.println("Original byte size of integers:   " + originalIntegers.length * TypeSize.INT32_BYTESIZE);
+        System.out.println("Compressed byte size of integers: " + compressed.length * TypeSize.INT32_BYTESIZE);
+        System.out.println("Compression ratio:                " + (float)(compressed.length * TypeSize.INT32_BYTESIZE) / (float)(originalIntegers.length * TypeSize.INT32_BYTESIZE));
     }
 
     @Test
     public void testDeltaValWithLongs() throws Exception {
-        long[] originalLongs = new long[64];
+        long[] originalLongs = new long[65536];
         for (int i = 0; i < originalLongs.length; i++)
             originalLongs[i] = (long)(10f * 1000f * Math.random() * (Math.random() > 0.5 ? 1f : -1f));
 
         long[] compressed   = Compression.deltaValEncode(originalLongs);
         long[] uncompressed = Compression.deltaValDecode(compressed);
 
+        System.out.println("Testing with small values:");
         for (int i = 0; i < originalLongs.length; i++) {
             if (originalLongs[i] != uncompressed[i]) {
                 System.out.println("Original longs:");
@@ -61,6 +69,12 @@ public class CompressionTest {
                         " uncompressed[" + i + "]=" + uncompressed[i]);
             }
         }
+
+        // Basic stats
+        System.out.println("Original number of integers:      " + originalLongs.length);
+        System.out.println("Original byte size of integers:   " + originalLongs.length * TypeSize.INT64_BYTESIZE);
+        System.out.println("Compressed byte size of integers: " + compressed.length * TypeSize.INT64_BYTESIZE);
+        System.out.println("Compression ratio:                " + (float)(compressed.length) / (float)(originalLongs.length));
 
         for (int i = 0; i < originalLongs.length; i++) {
 			originalLongs[i] += (2L << 37)+ i; // 2^37 to get out of range of Integers on 32 bits
@@ -70,6 +84,7 @@ public class CompressionTest {
         compressed   = Compression.deltaValEncode(originalLongs);
         uncompressed = Compression.deltaValDecode(compressed);
 
+        System.out.println("Testing with large values:");
         for (int i = 0; i < originalLongs.length; i++) {
             if (originalLongs[i] != uncompressed[i]) {
                 System.out.println("Original longs:");
@@ -85,6 +100,12 @@ public class CompressionTest {
                         " uncompressed[" + i + "]=" + uncompressed[i]);
             }
         }
+
+        // Basic stats
+        System.out.println("Original number of integers:      " + originalLongs.length);
+        System.out.println("Original byte size of integers:   " + originalLongs.length * TypeSize.INT64_BYTESIZE);
+        System.out.println("Compressed byte size of integers: " + compressed.length * TypeSize.INT64_BYTESIZE);
+        System.out.println("Compression ratio:                " + (float)(compressed.length) / (float)(originalLongs.length));
     }
 
     @Test
